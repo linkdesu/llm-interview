@@ -1,0 +1,79 @@
+# Spec: LLM Interview — AI Agent Generation Showcase
+
+## Problem Statement
+
+The user runs several open-weight models locally behind a llama.cpp router and wants to know which model (under which parameters) is best at generating small web projects in their preferred style. There is currently no practical way to compare: each agent run lives and dies in the terminal, the full process is never preserved, and outputs from different models can never be inspected side by side. The user needs a system that accumulates tasks, executes them in bulk, archives everything, and presents the results as a static site.
+
+## Solution
+
+A three-part system:
+
+1. **Question library**: tasks accumulate as directories under `question/` (`intent.md` + optional `spec.md`/`tickets.md`), mirroring the user's everyday grilling → spec → tickets workflow.
+2. **Runner**: a Bun script that drives a pristine, project-local deployment of pi (version-pinned, no global config pollution) through the Question × Model matrix. Each Run's transcript (JSONL) and Artifact (index.html / style.css / script.js) are archived together as an inseparable Session under `session/`.
+3. **Dashboard**: a static site (GitHub Pages). At build time, Session data is flattened and a Manifest is generated. Viewers browse via a sidebar (question → model, two levels, with keyword filter); the main area renders each matching Combo's Artifact live in iframes for direct comparison, with the transcript expandable.
+
+## User Stories
+
+1. As a task author, I want to add a task as a directory under `question/` (directory name is the slug), so that I can accumulate test tasks over time.
+2. As a task author, I want to write only `intent.md` in a Question, so that I can test the model's own planning ability.
+3. As a task author, I want to attach `spec.md`/`tickets.md` to a Question, so that I can test execution ability given a detailed spec.
+4. As a task author, I want spec/tickets handed to the model as file paths that it reads itself, so that the run mirrors how I actually talk to agents day to day.
+5. As an operator, I want to run the whole matrix (all Questions × all Models) with one command, so that I don't trigger runs one by one.
+6. As an operator, I want the runner to execute in model-major order (one model finishes all Questions before switching), so that llama.cpp router's JIT loading is not thrashed by repeated model swaps.
+7. As an operator, I want to filter the run scope with `--question` and `--model`, so that I can only run newly added tasks or newly added models.
+8. As an operator, I want the test pi fully isolated from the global install (independent version, independent config dir, all extensions/skills/context files disabled), so that every Run has a pristine, reproducible context.
+9. As an operator, I want the Model Registry to manually record each model's server-side sampling parameters (thinking/temp/top_k/top_p etc.), so that this snapshot is archived with each Run and shown to viewers.
+10. As an operator, I want the runner to append a uniform artifact contract to every prompt, so that Question files focus on the task itself.
+11. As an operator, I want the artifact contract to require exactly `index.html`, `style.css`, `script.js` — no extra files, CSS/JS not inlined, not minified/obfuscated, kept readable — so that I can directly read the code quality a model produces.
+12. As an operator, I want every Run to execute in an isolated working directory outside the repo, where the model cannot see the project's AGENTS.md, other Sessions' artifacts, or any project file, so that "copying homework" and environment pollution are impossible.
+13. As an operator, I want every Run archived in a fixed structure: `session/<question>/<model>/<datetime>/` (session.jsonl, the three artifact files, run.json), so that browsing the filesystem directly also makes sense.
+14. As an operator, I want repeated Runs of the same Combo all kept by datetime in the repo, so that experiment history is preserved.
+15. As an operator, I want run.json to record the Combo's full metadata (question, model, parameter snapshot, comboId, pi version, duration, status), so that builds and debugging have a single source of truth.
+16. As a viewer, I want to browse all published Combos in a two-level sidebar (question → model), so that I can quickly find the result I'm looking for.
+17. As a viewer, I want to filter the sidebar by keyword (e.g. a model name), so that I can see one model's results across all Questions.
+18. As a viewer, I want the main area to render the matching Combos' Artifacts side by side (live iframe previews) after selecting a question, so that I can compare outcomes at a glance.
+19. As a viewer, I want each Combo labeled with its model and parameter snapshot, so that I understand where differences come from.
+20. As a viewer, I want to expand a Combo's full transcript (messages, thinking, tool calls), so that I can judge how a model works, not just what it produced.
+21. As a publisher, I want push-to-GitHub to trigger the full build and release pipeline (manifest generation + dashboard build + Pages deploy), so that publishing is zero-touch.
+22. As a publisher, I want only the latest Run of each Combo published at build time (comboId = hash(question+model+parameters)), so that the site shows only the current best state while the repo keeps full history.
+23. As a maintainer, I want a unified glossary (CONTEXT.md) and ADRs for key architectural constraints, so that future-me and AI agents don't repeat old mistakes.
+
+## Implementation Decisions
+
+- **Top-level layout**: `question/` (task library), `session/` (archive), `dashboard/` (existing Vite + Vue 3 + TS site), plus new `runner/` (Bun project) and `docs/` (spec/adr).
+- **Runner stack**: Bun + TypeScript; pi installed as a local npm dependency of the runner (version pinned in the lockfile), invoked via `node_modules/.bin/pi`.
+- **Pristine execution environment**: `PI_CODING_AGENT_DIR` points to a project-local config directory containing only the two required hand-copied files `models.json` and `auth.json`; every invocation adds `--no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files`. This directory is not committed to git.
+- **Matrix definition**: cartesian product of all Questions × all Models in the registry, executed model-major; the only filters are `--question` and `--model`.
+- **Prompt assembly**: `intent.md` content + relative-path pointers to spec/tickets (these files are copied into the isolated working directory; the model reads them with its read tool; missing files are simply not mentioned) + the runner-appended artifact contract.
+- **Artifact contract**: exactly three files `index.html` / `style.css` / `script.js`; CSS/JS not inlined, not minified/obfuscated, kept readable; no other files. The runner validates the file list at collection time and flags violations in run.json (without blocking archival).
+- **Run isolation**: pi's cwd is a temp working directory outside the repo (a dedicated path under the system temp area); the Question's spec/tickets are copied in. Together with `--no-context-files`, the model cannot touch the project's AGENTS.md, other Sessions' artifacts under `session/`, or any project file. After the Run, the runner collects the transcript and the three artifact files into `session/<question>/<model>/<datetime>/`, then cleans up the temp directory.
+- **Session persistence**: pi is invoked with the isolated working directory as cwd, `--session-dir` pointing at that same directory and `--session-id session`, so pi writes `*_session.jsonl` directly (verified by smoke test); the file is normalized to `session.jsonl` at collection time.
+- **Model Registry**: a config file inside the runner project, manually maintained; fields include slug, provider, modelId, parameter snapshot (free-form keys such as thinking/temp/top_k/top_p), and notes. The registry both documents the pi model configuration and feeds run.json.
+- **run.json**: records question slug, model slug, parameter snapshot, comboId (hash(question+model+parameters)), pi version, start/end time, and exit status.
+- **No sampling-parameter automation**: per ADR 0001 — parameters are server-side; the runner records but never controls them. thinking on/off comparison and other parameter dimensions are out of scope for now.
+- **Manifest build**: a standalone Bun script that scans the full `session/` history, groups by comboId, takes the latest Run per group, copies its session.jsonl / three artifact files / run.json into a flat directory inside the dashboard build output, and generates the Manifest (comboId → metadata + file paths).
+- **Dashboard information architecture**: two-level sidebar (question → model) + keyword filter; the main area shows matching Combos as side-by-side iframe previews (artifact-first), each labeled with model + parameter snapshot, with the transcript (JSONL rendered as a message timeline, thinking collapsed by default) expandable.
+- **Publishing**: GitHub Actions — on push, run manifest build + `vite build` + Pages deploy; `session/` is fully committed to git; size optimization is deferred.
+
+## Testing Decisions
+
+- **What makes a good test**: only externally observable behavior (filesystem products, exit codes, manifest contents), never implementation details.
+- **Seam one (the pi CLI boundary)**: runner tests use a stub `pi` executable (writes a canned session.jsonl and the three artifact files into its cwd, exits 0), exercising the whole runner without an LLM: matrix expansion, prompt assembly, isolated working directory, collection/archival, run.json, session file normalization.
+- **Seam two (the `session/` filesystem)**: the manifest build script is tested against fixture session trees: grouping multiple historical Runs per Combo and picking the latest, flattened copying, Manifest field correctness.
+- **Dashboard**: light rendering tests against a fixture Manifest (sidebar tree construction, filter logic); no pixel-level UI tests.
+- **Smoke test**: one real single-Question single-Model Run in the live environment (already used to verify pi isolation and the persistence mechanism), as a manual backstop outside CI.
+
+## Out of Scope
+
+- Automated comparison of sampling parameters (temp/top_k/top_p, thinking on/off) — see ADR 0001.
+- Session file size optimization (explicitly deferred by the user).
+- Mobile adaptation, dark/light themes, and other UI polish.
+- Multi-language dashboard, share links, comments, or other audience-interaction features.
+- Automated scoring/grading of Artifacts (comparison judgment is done by human eyes).
+
+## Further Notes
+
+- The local llama.cpp router is confirmed to support JIT model loading; `/v1/models` exposes all models. Model-major ordering only reduces load/unload churn. The router's address is local environment detail and intentionally not recorded in the repo — it lives only in the (git-ignored) pi config directory.
+- pi's custom `--session-dir` stores files flat (no cwd subdirectory); `--session-id session` produces `*_session.jsonl`, so the runner only needs to normalize the name.
+- The smoke test verified the whole chain: pristine config + local model + non-interactive mode.
+- A Question's spec.md/tickets.md are expected to be produced by the user's everyday grilling → to-spec → to-tickets workflow — the same pipeline that produced this spec.
