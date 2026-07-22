@@ -1,0 +1,12 @@
+{
+  "name": "llm-interview-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "bun src/run.ts",
+    "build:sessions": "bun src/build-sessions.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.81.1"
+  }
+}
