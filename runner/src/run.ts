@@ -223,22 +223,21 @@ async function copyArtifacts(
 /**
  * Filter items by name. Throws with a list of available names on unknown filters.
  */
-function applyNameFilter<T extends { name: string }>(
+function applyNameFilter<T>(
   items: T[],
   filter: string[] | undefined,
-  kind: string
+  kind: string,
+  keyFn: (item: T) => string
 ): T[] {
   if (!filter || filter.length === 0) return items;
-  const names = new Set(items.map((i) => i.name));
-  const unknown = filter.filter((n) => !names.has(n));
+  const keys = new Set(items.map(keyFn));
+  const unknown = filter.filter((n) => !keys.has(n));
   if (unknown.length > 0) {
     throw new Error(
-      `Unknown ${kind} filter name(s): ${unknown.join(", ")}. Available ${kind}s: ${[...names]
-        .sort()
-        .join(", ")}`
+      `Unknown ${kind} filter name(s): ${unknown.join(", ")}.`
     );
   }
-  return items.filter((i) => filter.includes(i.name));
+  return items.filter((i) => filter.includes(keyFn(i)));
 }
 
 /**
@@ -282,8 +281,8 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   const questions = await loadQuestions(questionDir);
   log(`loaded ${models.length} models, ${questions.length} questions`);
 
-  const filteredModels = applyNameFilter(models, modelFilter, "model");
-  const filteredQuestions = applyNameFilter(questions, questionFilter, "question");
+  const filteredModels = applyNameFilter(models, modelFilter, "model", (m) => m.modelId);
+  const filteredQuestions = applyNameFilter(questions, questionFilter, "question", (q) => q.name);
   if (filteredModels.length !== models.length || filteredQuestions.length !== questions.length) {
     log(`filtered to ${filteredModels.length} models \u00d7 ${filteredQuestions.length} questions = ${filteredModels.length * filteredQuestions.length} combos`);
   }
