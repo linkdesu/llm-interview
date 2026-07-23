@@ -3,8 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "run": "bun src/run.ts",
-    "build:sessions": "bun src/build-sessions.ts",
+    "main": "bun src/run.ts",
     "lint": "eslint ."
   },
   "dependencies": {

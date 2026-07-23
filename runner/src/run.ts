@@ -15,6 +15,13 @@ import { loadQuestions, type Question } from "./question";
 import { buildPrompt } from "./prompt";
 import { runPi, type PiEnvironment, type PiRunResult } from "./pi-runner";
 
+const log = (msg: string) => {
+  if (process.env.NODE_ENV !== "test") console.error(`[matrix] ${msg}`);
+};
+const progress = (msg: string) => {
+  if (process.env.NODE_ENV !== "test") console.log(msg);
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -237,17 +244,38 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   // Load registry and questions
   const models = await loadRegistry(registryPath);
   const questions = await loadQuestions(questionDir);
+  log(`loaded ${models.length} models, ${questions.length} questions`);
 
   const filteredModels = applyNameFilter(models, modelFilter, "model");
   const filteredQuestions = applyNameFilter(questions, questionFilter, "question");
+  if (filteredModels.length !== models.length || filteredQuestions.length !== questions.length) {
+    log(`filtered to ${filteredModels.length} models \u00d7 ${filteredQuestions.length} questions = ${filteredModels.length * filteredQuestions.length} combos`);
+  }
+
+  // Pre-compute the full combo list for progress tracking
+  type ComboPlan = { model: typeof filteredModels[number]; question: typeof filteredQuestions[number]; comboId: string };
+  const comboPlan: ComboPlan[] = [];
+  for (const model of filteredModels) {
+    for (const question of filteredQuestions) {
+      comboPlan.push({ model, question, comboId: computeComboId(question.name, model.name, model.params) });
+    }
+  }
+  const total = comboPlan.length;
 
   const outcomes: RunComboOutcome[] = [];
+  const completed = new Set<string>();
 
   // Model-major iteration: one model finishes all questions before the next
   for (const model of filteredModels) {
     for (const question of filteredQuestions) {
       const comboId = computeComboId(question.name, model.name, model.params);
       const startedAt = new Date().toISOString();
+
+      const comboIndex = comboPlan.findIndex((c) => c.comboId === comboId) + 1;
+      const label = `${question.name} \u00d7 ${model.name}`;
+
+      progress(`\n=== Combo ${comboIndex}/${total} ===`);
+      progress(`Starting: ${label}`);
 
       let status: "ok" | "timeout" | "error" = "ok";
       let exitCode: number | null;
@@ -256,6 +284,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       try {
         // Build prompt for this question
         const prompt = buildPrompt(question);
+        log(`built prompt (${prompt.length} chars) for ${question.name}`);
 
         // Run pi in an isolated workdir
         const result: PiRunResult = await runPi({
@@ -290,6 +319,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
         // Copy artifacts from workdir to archive
         await copyArtifacts(result.workdir, archiveDir);
+        log(`archived to: ${archiveDir}`);
 
         // Validate artifact contract against files in workdir
         const workdirFiles = await readdir(result.workdir);
@@ -298,6 +328,9 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         // A Session is transcript + artifact, inseparable — flag a missing transcript
         if (!result.sessionFile) {
           contractViolations.push("missing transcript: session.jsonl");
+        }
+        if (contractViolations.length > 0) {
+          log(`contract violations: ${contractViolations.join("; ")}`);
         }
 
         const endedAt = new Date().toISOString();
@@ -330,9 +363,11 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           JSON.stringify(runJson, null, 2),
           "utf-8"
         );
+        log(`wrote run.json to archive`);
 
         // Delete the isolated workdir after archiving
         await rm(result.workdir, { recursive: true, force: true });
+        log(`deleted workdir`);
 
         outcomes.push({
           question,
@@ -368,6 +403,25 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           exitCode,
         });
       }
+
+      completed.add(comboId);
+      const durSec = ((Date.now() - Date.parse(startedAt)) / 1000).toFixed(1);
+      const statusIcon = status === "ok" ? "\u2705" : status === "timeout" ? "\u23f0" : "\u274c";
+      progress(`=== Combo ${comboIndex}/${total} Done: ${statusIcon} ${status.toUpperCase()} (${durSec}s) ===`);
+
+      // Print progress overview
+      const lines = [`\nProgress:`];
+      for (const plan of comboPlan) {
+        if (completed.has(plan.comboId)) {
+          const o = outcomes.find((r) => r.comboId === plan.comboId)!;
+          const d = (o.durationMs / 1000).toFixed(1);
+          const ic = o.status === "ok" ? "\u2705" : o.status === "timeout" ? "\u23f0" : "\u274c";
+          lines.push(`  ${ic} ${plan.question.name} \u00d7 ${plan.model.name}  ${o.status.toUpperCase()}  ${d}s`);
+        } else {
+          lines.push(`  \u23f3 ${plan.question.name} \u00d7 ${plan.model.name}  pending`);
+        }
+      }
+      progress(lines.join("\n"));
     }
   }
 
@@ -440,7 +494,10 @@ if (import.meta.main) {
     timeoutMs,
     questionFilter,
     modelFilter,
-    piVersion: await detectPiVersion(piBin),
+    piVersion: await detectPiVersion(piBin).then((v) => {
+      log(`pi --version => ${v}`);
+      return v;
+    }),
   });
 
   // Print per-combo status table

@@ -10,6 +10,76 @@ import {
 import { join, resolve } from "node:path";
 import type { Question } from "./question";
 
+const log = (msg: string) => {
+  if (process.env.NODE_ENV !== "test") console.error(`[pi] ${msg}`);
+};
+
+type Section = "idle" | "thinking" | "tool" | "response";
+let aiSection: Section = "idle";
+let aiStarted = false;
+
+const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
+const reset = "\x1b[0m";
+const bold = (s: string) => `\x1b[1m${s}\x1b[22m`;
+
+function sectionHeader(label: string): void {
+  process.stdout.write(`\n${dim("\u2501".repeat(8))} ${bold(label)} ${dim("\u2501".repeat(8))}\n`);
+}
+
+function aiSeparator(): void {
+  if (!aiStarted) {
+    aiStarted = true;
+    process.stdout.write(`\n${dim("\u2501".repeat(50))}\n`);
+  }
+}
+
+function switchSection(section: Section): void {
+  if (aiSection === section) return;
+  aiSection = section;
+  aiSeparator();
+  const labels: Record<Section, string> = {
+    idle: "",
+    thinking: "Thinking",
+    tool: "Tool Calls",
+    response: "Response",
+  };
+  sectionHeader(labels[section]);
+}
+
+function renderJsonEvent(line: string): void {
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(line);
+  } catch {
+    return;
+  }
+
+  if (event.type === "message_update") {
+    const ev = event.assistantMessageEvent as Record<string, unknown> | undefined;
+    if (!ev || typeof ev !== "object") return;
+    if (ev.type === "thinking_delta") {
+      switchSection("thinking");
+      process.stdout.write(String(ev.delta ?? ""));
+    } else if (ev.type === "text_delta") {
+      switchSection("response");
+      process.stdout.write(String(ev.delta ?? ""));
+    } else if (ev.type === "tool_use") {
+      const name = ev.toolName ?? ev.name ?? "?";
+      switchSection("tool");
+      process.stdout.write(`${dim("  \u2514 Tool:")} ${name}${reset}\n`);
+    }
+  } else if (event.type === "tool_start") {
+    const name = event.toolName ?? event.name ?? "?";
+    switchSection("tool");
+    process.stdout.write(`${dim("  \u2514 Tool:")} ${name}${reset}\n`);
+  } else if (event.type === "tool_end") {
+    const name = event.toolName ?? event.name ?? "?";
+    const result = event.result as string ?? event.output as string ?? "";
+    const preview = String(result).slice(0, 300).replace(/\n/g, " ");
+    process.stdout.write(`${dim("  \u2514 Done:")} ${name}${preview ? dim(" \u2014 ") + preview : ""}${reset}\n`);
+  }
+}
+
 /**
  * Shared pi execution environment: which binary, which config home,
  * where isolated workdirs live, and the wall-clock budget per run.
@@ -88,6 +158,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     `pi-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
   await mkdir(workdir, { recursive: true });
+  log(`created workdir: ${workdir}`);
 
   // Copy question files into the workdir if they exist
   if (question.hasSpec) {
@@ -95,12 +166,14 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
       join(question.dir, "spec.md"),
       join(workdir, "spec.md")
     );
+    log(`copied spec.md to workdir`);
   }
   if (question.hasTickets) {
     await copyFile(
       join(question.dir, "tickets.md"),
       join(workdir, "tickets.md")
     );
+    log(`copied tickets.md to workdir`);
   }
 
   // Path for capturing stdout+stderr
@@ -109,6 +182,8 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   // Build the pi command arguments
   const args: string[] = [
     "-p",
+    "--mode",
+    "json",
     "--no-extensions",
     "--no-skills",
     "--no-prompt-templates",
@@ -129,22 +204,46 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     PI_CODING_AGENT_DIR: resolve(piHome),
   };
 
+  const truncatedArgs = args.map((a) =>
+    a.length > 120 ? a.slice(0, 120) + "..." : a
+  );
+  log(`spawning: ${piBin} ${truncatedArgs.join(" ")}`);
+
   const child = spawn(piBin, args, {
     cwd: workdir,
     env,
     stdio: ["inherit", "pipe", "pipe"],
   });
 
-  // Collect stdout and stderr into the output log file
+  // Collect all output (buffer + stderr) into chunks for the log file
   const chunks: Buffer[] = [];
-  child.stdout.on("data", (d: Buffer) => chunks.push(d));
-  child.stderr.on("data", (d: Buffer) => chunks.push(d));
+
+  // Pipe stderr directly to parent stderr and collect
+  child.stderr.on("data", (d: Buffer) => {
+    process.stderr.write(d);
+    chunks.push(d);
+  });
+
+  // Parse JSONL events from stdout and render human-readable text
+  let lineBuffer = "";
+  child.stdout.on("data", (d: Buffer) => {
+    chunks.push(d);
+    lineBuffer += d.toString("utf-8");
+    const lines = lineBuffer.split("\n");
+    // Keep the last (potentially partial) line in the buffer
+    lineBuffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.trim().length === 0) continue;
+      renderJsonEvent(line);
+    }
+  });
 
   // Set up timeout to kill the process
   let timedOut = false;
   let exitCode: number | null = null;
   const timeoutId = setTimeout(() => {
     timedOut = true;
+    log(`timeout reached (${timeoutMs}ms), killing with SIGKILL`);
     child.kill("SIGKILL");
   }, timeoutMs);
 
@@ -163,8 +262,19 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     });
   });
 
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  if (aiStarted) {
+    process.stdout.write(`\n${dim("\u2501".repeat(50))}\n\n`);
+  }
+  if (timedOut) {
+    log(`timed out after ${elapsed}s`);
+  } else {
+    log(`exited with code ${exitCode} (${elapsed}s)`);
+  }
+
   // Write collected output to the log file
   await writeFile(stdoutFile, Buffer.concat(chunks));
+  log(`wrote output log: ${stdoutFile}`);
 
   // Find and normalize the session JSONL file
   let sessionFile: string | null = null;
@@ -189,11 +299,15 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
       // Only rename if it's not already named session.jsonl
       if (newest !== "session.jsonl") {
         await rename(srcPath, dstPath);
+        log(`renamed ${newest} to session.jsonl`);
       }
       sessionFile = dstPath;
+      log(`found session file: ${sessionFile}`);
+    } else {
+      log(`no .jsonl files found in workdir`);
     }
-  } catch {
-    // If we can't read the directory, sessionFile stays null
+  } catch (err) {
+    log(`error finding session file: ${err}`);
   }
 
   const durationMs = Date.now() - startTime;

@@ -5,10 +5,13 @@
       "provider": "llamacpp-local",
       "modelId": "qwen3.6-27b-fable-fusion-q5",
       "params": {
-        "thinking": "off",
-        "temp": 0.7,
+        "thinking": "on",
+        "temp": 0.6,
         "top_k": 20,
-        "top_p": 0.95
+        "top_p": 0.95,
+        "repeat_penalty": 1.0,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
       },
       "notes": "llama.cpp server-side sampling defaults recorded for archival purposes"
     }
