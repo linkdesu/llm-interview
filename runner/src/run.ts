@@ -167,6 +167,37 @@ function validateArtifactContract(files: string[]): string[] {
 }
 
 /**
+ * Strip base64 image data from session.jsonl to reduce archive size.
+ * Replaces `{"type":"image","data":"base64..."}` with `{"type":"image","data":"[stripped]"}`.
+ */
+async function stripSessionImageData(archiveDir: string): Promise<void> {
+  const sessionPath = join(archiveDir, "session.jsonl");
+  let content: string;
+  try { content = await readFile(sessionPath, "utf-8"); } catch { return; }
+
+  const cleaned = content.split("\n").filter(Boolean).map((line) => {
+    try {
+      const obj = JSON.parse(line);
+      const msg = obj.message as Record<string, unknown> | undefined;
+      if (msg?.content && Array.isArray(msg.content)) {
+        msg.content = msg.content.map((item: Record<string, unknown>) => {
+          if (item.type === "image") item.data = "[stripped]";
+          return item;
+        });
+      }
+      return JSON.stringify(obj);
+    } catch {
+      return line;
+    }
+  }).join("\n");
+
+  if (cleaned !== content) {
+    await writeFile(sessionPath, cleaned, "utf-8");
+    log(`stripped image data from session.jsonl`);
+  }
+}
+
+/**
  * Copy artifact files (.html, .css, .js) and session.jsonl from workdir to archive.
  */
 async function copyArtifacts(
@@ -326,6 +357,9 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         // Copy artifacts from workdir to archive
         await copyArtifacts(result.workdir, archiveDir);
         log(`archived to: ${archiveDir}`);
+
+        // Strip image data from session.jsonl to keep archive size manageable
+        await stripSessionImageData(archiveDir);
 
         // Validate artifact contract against files in workdir
         const workdirFiles = await readdir(result.workdir);
