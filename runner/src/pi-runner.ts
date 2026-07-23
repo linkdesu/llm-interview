@@ -352,13 +352,20 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     stdio: ["inherit", "pipe", "pipe"],
   });
 
-  // Collect all output (buffer + stderr) into chunks for the log file
+  // Collect all output (stdout + stderr) into chunks for the log file
   const chunks: Buffer[] = [];
 
-  // Pipe stderr directly to parent stderr and collect
+  // Prefix pi stderr lines with [pi>error] for visibility
+  let stderrBuffer = "";
   child.stderr.on("data", (d: Buffer) => {
-    process.stderr.write(d);
     chunks.push(d);
+    stderrBuffer += d.toString("utf-8");
+    const lines = stderrBuffer.split("\n");
+    stderrBuffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.trim().length === 0) continue;
+      process.stderr.write(`[pi>error] ${line}\n`);
+    }
   });
 
   // Parse JSONL events from stdout and render human-readable text
