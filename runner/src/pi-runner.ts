@@ -21,7 +21,7 @@ let aiSection: Section = "idle";
 let aiStarted = false;
 let turnCount = 0;
 let maxTurnsExceeded = false;
-const MAX_TURNS = 100;
+let maxTurns = 100;
 
 const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
 const yellow = (s: string) => `\x1b[33m${s}\x1b[39m`;
@@ -135,7 +135,7 @@ function renderJsonEvent(line: string): void {
   // --- Turn lifecycle ---
   if (t === "turn_start") {
     turnCount++;
-    if (turnCount > MAX_TURNS) {
+    if (turnCount > maxTurns) {
       maxTurnsExceeded = true;
     }
     return;
@@ -206,6 +206,8 @@ export interface PiEnvironment {
   tempRoot: string;
   /** Wall-clock timeout in milliseconds; the process is killed if exceeded. */
   timeoutMs: number;
+  /** Maximum assistant turns before the process is killed. */
+  maxTurns: number;
 }
 
 /**
@@ -259,6 +261,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   aiStarted = false;
   turnCount = 0;
   maxTurnsExceeded = false;
+  maxTurns = options.maxTurns;
 
   const {
     prompt,

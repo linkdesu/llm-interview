@@ -41,13 +41,21 @@ async function writeFixtures(
   models: Array<{ name: string; provider: string; modelId: string; params: Record<string, unknown> }>,
   questions: Array<{ name: string; intent: string; hasSpec?: boolean; hasTickets?: boolean }>
 ) {
-  // Registry
-  const registryPath = join(root, "models.registry.json");
-  await writeFile(
-    registryPath,
-    JSON.stringify({ models }, null, 2),
-    "utf-8"
-  );
+  // Config (TOML)
+  const configPath = join(root, "config.toml");
+  const modelEntries = models.map((m) => {
+    const paramsLines = Object.entries(m.params)
+      .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+      .join("\n");
+    return `[[models]]
+name = ${JSON.stringify(m.name)}
+provider = ${JSON.stringify(m.provider)}
+modelId = ${JSON.stringify(m.modelId)}
+[models.params]
+${paramsLines}`;
+  }).join("\n\n");
+  const configToml = `max_turns = 100\nrun_rules = ""\n\n${modelEntries}\n`;
+  await writeFile(configPath, configToml, "utf-8");
 
   // Question dirs
   const questionDir = join(root, "questions");
@@ -65,7 +73,7 @@ async function writeFixtures(
     }
   }
 
-  return { registryPath, questionDir };
+  return { configPath, questionDir };
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +117,7 @@ describe("runMatrix", () => {
   let orderLogPath: string;
   let stubPiPath: string;
   let misbehaveStubPath: string;
-  let registryPath: string;
+  let configPath: string;
   let questionDir: string;
   let sessionRoot: string;
   let piHome: string;
@@ -135,7 +143,7 @@ describe("runMatrix", () => {
     await createStubPi(misbehaveStubPath, orderLogPath, true);
 
     // Write fixtures: 2 models x 2 questions
-    const { registryPath: rp, questionDir: qd } = await writeFixtures(
+    const { configPath: rp, questionDir: qd } = await writeFixtures(
       repoDir,
       [
         {
@@ -161,7 +169,7 @@ describe("runMatrix", () => {
       ]
     );
 
-    registryPath = rp;
+    configPath = rp;
     questionDir = qd;
   });
 
@@ -182,13 +190,15 @@ describe("runMatrix", () => {
 
     const results = await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: stubPiPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     expect(results).toHaveLength(4); // 2 models x 2 questions
@@ -230,13 +240,15 @@ describe("runMatrix", () => {
 
     await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: stubPiPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     // Check one archive path
@@ -266,13 +278,15 @@ describe("runMatrix", () => {
 
     await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: stubPiPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     const archivePath = join(
@@ -308,13 +322,15 @@ describe("runMatrix", () => {
 
     await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: stubPiPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     // q-counter has hasSpec: true — its workdir contains a copied spec.md
@@ -337,13 +353,15 @@ describe("runMatrix", () => {
 
     const results = await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: stubPiPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     // Find two runs with the same model but different questions
@@ -367,13 +385,15 @@ describe("runMatrix", () => {
     const sessionRoot2 = join(sessionRoot, "..", "session-2");
     const results2 = await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot: sessionRoot2,
       piBin: stubPiPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     const alphaRuns2 = results2.filter((r) => r.model.name === "model-alpha");
@@ -399,13 +419,15 @@ describe("runMatrix", () => {
     // Use misbehaving stub that creates extra.js
     await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: misbehaveStubPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     // Check run.json for contract violations
@@ -437,13 +459,15 @@ describe("runMatrix", () => {
 
     await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: stubPiPath,
       piHome,
       tempRoot: runTempRoot,
       timeoutMs: 30000,
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     const finalRunDirs = await listDir(runTempRoot);
@@ -461,7 +485,7 @@ describe("runMatrix", () => {
 
     const results = await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: stubPiPath,
       piHome,
@@ -470,6 +494,8 @@ describe("runMatrix", () => {
       questionFilter: ["q-counter"],
       modelFilter: ["model-beta"],
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     // Should only run 1 combo: q-counter x model-beta
@@ -487,7 +513,7 @@ describe("runMatrix", () => {
     await expect(
       runMatrix({
         questionDir,
-        registryPath,
+        configPath,
         sessionRoot,
         piBin: stubPiPath,
         piHome,
@@ -505,7 +531,7 @@ describe("runMatrix", () => {
     await expect(
       runMatrix({
         questionDir,
-        registryPath,
+        configPath,
         sessionRoot,
         piBin: stubPiPath,
         piHome,
@@ -526,7 +552,7 @@ describe("runMatrix", () => {
     await expect(
       runMatrix({
         questionDir,
-        registryPath,
+        configPath,
         sessionRoot,
         piBin: stubPiPath,
         piHome,
@@ -559,7 +585,7 @@ exit 0
 
     await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: lazyStub,
       piHome,
@@ -568,6 +594,8 @@ exit 0
       questionFilter: ["q-hello"],
       modelFilter: ["model-alpha"],
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     const archivePath = join(
@@ -608,7 +636,7 @@ exit 0
 
     await runMatrix({
       questionDir,
-      registryPath,
+      configPath,
       sessionRoot,
       piBin: muteStub,
       piHome,
@@ -617,6 +645,8 @@ exit 0
       questionFilter: ["q-hello"],
       modelFilter: ["model-alpha"],
       piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
     });
 
     const archivePath = join(

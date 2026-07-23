@@ -16,9 +16,10 @@ export const ARTIFACT_CONTRACT = `Artifact contract:
  * (a) the intent text, trimmed;
  * (b) if hasSpec: instruction to read ./spec.md;
  * (c) if hasTickets: instruction to read ./tickets.md;
- * (d) horizontal rule + artifact contract, always last.
+ * (d) global run rules (if non-empty);
+ * (e) horizontal rule + artifact contract, always last.
  */
-export function buildPrompt(question: Question): string {
+export function buildPrompt(question: Question, globalRules = ""): string {
   const lines: string[] = [];
 
   // (a) Intent text, trimmed
@@ -36,7 +37,13 @@ export function buildPrompt(question: Question): string {
     lines.push("A detailed ticket breakdown is available at ./tickets.md. You MUST read that file with your read tool before starting.");
   }
 
-  // (d) Artifact contract, separated by horizontal rule
+  // (d) Global run rules (if non-empty)
+  if (globalRules.trim().length > 0) {
+    lines.push("");
+    lines.push(globalRules.trim());
+  }
+
+  // (e) Artifact contract, separated by horizontal rule
   lines.push("");
   lines.push("---");
   lines.push(ARTIFACT_CONTRACT);

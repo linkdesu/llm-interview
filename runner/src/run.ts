@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 import { join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { loadRegistry, type RegistryModel } from "./registry";
+import { loadConfig, loadRegistry, type RegistryModel } from "./registry";
 import { loadQuestions, type Question } from "./question";
 import { buildPrompt } from "./prompt";
 import { runPi, type PiEnvironment, type PiRunResult } from "./pi-runner";
@@ -32,8 +32,8 @@ const progress = (msg: string) => {
 export interface RunMatrixOptions extends PiEnvironment {
   /** Path to the question directory containing question subdirectories. */
   questionDir: string;
-  /** Path to the models.registry.json file. */
-  registryPath: string;
+  /** Path to the config.toml file. */
+  configPath: string;
   /** Root directory where archived sessions are stored. */
   sessionRoot: string;
   /** Optional list of question names to include (match by name). */
@@ -42,6 +42,8 @@ export interface RunMatrixOptions extends PiEnvironment {
   modelFilter?: string[];
   /** Pi version string to record in run.json. */
   piVersion: string;
+  /** Global run rules injected into every prompt. */
+  runRules: string;
 }
 
 /**
@@ -220,7 +222,7 @@ function applyNameFilter<T extends { name: string }>(
 export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutcome[]> {
   const {
     questionDir,
-    registryPath,
+    configPath,
     sessionRoot,
     piBin,
     piHome,
@@ -229,6 +231,8 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     questionFilter,
     modelFilter,
     piVersion,
+    runRules,
+    maxTurns,
   } = options;
 
   // Isolation guard: the temp area for run workdirs must live outside the
@@ -243,7 +247,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   }
 
   // Load registry and questions
-  const models = await loadRegistry(registryPath);
+  const models = await loadRegistry(configPath);
   const questions = await loadQuestions(questionDir);
   log(`loaded ${models.length} models, ${questions.length} questions`);
 
@@ -284,7 +288,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
       try {
         // Build prompt for this question
-        const prompt = buildPrompt(question);
+        const prompt = buildPrompt(question, runRules);
         log(`built prompt (${prompt.length} chars) for ${question.name}`);
 
         // Run pi in an isolated workdir
@@ -297,6 +301,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           piHome,
           tempRoot,
           timeoutMs,
+          maxTurns,
         });
 
         durationMs = result.durationMs;
@@ -484,10 +489,14 @@ if (import.meta.main) {
   const repoRoot = resolve(__dirname, "..", "..");
   const piBin = join(repoRoot, "runner", "node_modules", ".bin", "pi");
 
+  // Load runner config
+  const configPath = join(repoRoot, "runner", "config.toml");
+  const config = await loadConfig(configPath);
+
   // Run the matrix with defaults
   const outcomes = await runMatrix({
     questionDir: join(repoRoot, "question"),
-    registryPath: join(repoRoot, "runner", "models.registry.json"),
+    configPath,
     sessionRoot: join(repoRoot, "session"),
     piBin,
     piHome: join(repoRoot, ".pi-home"),
@@ -495,6 +504,8 @@ if (import.meta.main) {
     timeoutMs,
     questionFilter,
     modelFilter,
+    maxTurns: config.maxTurns,
+    runRules: config.runRules,
     piVersion: await detectPiVersion(piBin).then((v) => {
       log(`pi --version => ${v}`);
       return v;

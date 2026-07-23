@@ -1,96 +1,69 @@
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { join, resolve, dirname } from "node:path";
+import { parse } from "smol-toml";
 
 /**
  * A local LLM model entry in the registry.
- * Records the model identity and a snapshot of its server-side sampling parameters.
  */
 export interface RegistryModel {
-  /** Unique kebab-case identifier for this model (used in paths and IDs). */
   name: string;
-  /** Pi provider name (e.g., "llamacpp-local"). */
   provider: string;
-  /** The model id sent to the API. */
   modelId: string;
-  /** Free-form sampling parameter snapshot (e.g., thinking, temp, top_k). */
   params: Record<string, string | number | boolean>;
-  /** Optional human-readable notes about the model or its parameters. */
   notes?: string;
 }
 
-interface RawRegistryModel {
-  name?: unknown;
-  provider?: unknown;
-  modelId?: unknown;
-  params?: unknown;
-  notes?: unknown;
-}
-
-interface RawRegistry {
-  models?: unknown;
-}
-
 /**
- * Load and validate a model registry JSON file.
- * @param path - Path to the models.registry.json file.
- * @returns Array of validated RegistryModel entries.
- * @throws Error if the file is invalid or contains malformed entries.
+ * Full runner configuration loaded from config.toml.
  */
-export async function loadRegistry(path: string): Promise<RegistryModel[]> {
-  const raw = readFileSync(path, "utf-8");
-  const data: RawRegistry = JSON.parse(raw);
+export interface RunnerConfig {
+  models: RegistryModel[];
+  maxTurns: number;
+  runRules: string;
+  configDir: string;
+}
 
-  if (!data.models || !Array.isArray(data.models)) {
-    throw new Error(`Invalid registry: top-level "models" array is missing or not an array`);
-  }
+function toPrimitive(v: unknown): string | number | boolean {
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
+  if (v == null) return "";
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
 
+function validateModels(rawModels: unknown[]): RegistryModel[] {
   const names = new Set<string>();
   const result: RegistryModel[] = [];
 
-  for (let i = 0; i < data.models.length; i++) {
-    const entry = data.models[i] as RawRegistryModel;
-    const entryLabel = `models[${i}]`;
+  for (let i = 0; i < rawModels.length; i++) {
+    const entry = rawModels[i] as Record<string, unknown>;
+    const label = `models[${i}]`;
 
-    // Validate name
-    if (typeof entry.name !== "string" || !entry.name.trim()) {
-      throw new Error(`Invalid entry at ${entryLabel}: "name" must be a non-empty string`);
+    const name = String(entry.name ?? "");
+    if (!name.trim()) throw new Error(`Invalid entry at ${label}: "name" must be a non-empty string`);
+    if (names.has(name)) throw new Error(`Invalid entry at ${label}: duplicate name "${name}"`);
+    names.add(name);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
+      throw new Error(`Invalid entry at ${label}: "name" must be path-safe, got "${name}"`);
     }
 
-    if (names.has(entry.name)) {
-      throw new Error(`Invalid entry at ${entryLabel}: duplicate name "${entry.name}"`);
-    }
-    names.add(entry.name);
+    const provider = String(entry.provider ?? "");
+    if (!provider.trim()) throw new Error(`Invalid entry at ${label}: "provider" must be a non-empty string`);
 
-    // Names are used in filesystem paths and URLs — require path-safe characters
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(entry.name)) {
-      throw new Error(
-        `Invalid entry at ${entryLabel}: "name" must be path-safe (letters, digits, ".", "_", "-"; must start with a letter or digit), got "${entry.name}"`
-      );
-    }
+    const modelId = String(entry.modelId ?? "");
+    if (!modelId.trim()) throw new Error(`Invalid entry at ${label}: "modelId" must be a non-empty string`);
 
-    // Validate provider
-    if (typeof entry.provider !== "string" || !entry.provider.trim()) {
-      throw new Error(`Invalid entry at ${entryLabel}: "provider" must be a non-empty string`);
-    }
-
-    // Validate modelId
-    if (typeof entry.modelId !== "string" || !entry.modelId.trim()) {
-      throw new Error(`Invalid entry at ${entryLabel}: "modelId" must be a non-empty string`);
-    }
-
-    // Validate params (defaults to {})
-    let params: Record<string, string | number | boolean>;
-    if (entry.params === undefined || entry.params === null) {
+    let params: Record<string, string | number | boolean> = {};
+    if (entry.params != null && typeof entry.params === "object") {
+      const raw = entry.params as Record<string, unknown>;
       params = {};
-    } else if (typeof entry.params === "object" && !Array.isArray(entry.params)) {
-      params = entry.params as Record<string, string | number | boolean>;
-    } else {
-      throw new Error(`Invalid entry at ${entryLabel}: "params" must be an object when present`);
+      for (const k of Object.keys(raw)) {
+        params[k] = toPrimitive(raw[k]);
+      }
     }
 
     result.push({
-      name: entry.name,
-      provider: entry.provider,
-      modelId: entry.modelId,
+      name,
+      provider,
+      modelId,
       params,
       notes: typeof entry.notes === "string" ? entry.notes : undefined,
     });
@@ -98,3 +71,41 @@ export async function loadRegistry(path: string): Promise<RegistryModel[]> {
 
   return result;
 }
+
+/**
+ * Load and validate the full runner configuration from a TOML file.
+ */
+export async function loadConfig(path: string): Promise<RunnerConfig> {
+  const raw = await readFile(path, "utf-8");
+  const data = parse(raw) as Record<string, unknown>;
+  const configDir = resolve(dirname(path));
+
+  if (!Array.isArray(data.models)) {
+    throw new Error(`Invalid config: "models" array is missing or not an array`);
+  }
+  const models = validateModels(data.models);
+
+  const maxTurns = typeof data.max_turns === "number" ? data.max_turns : 100;
+
+  let runRules = "";
+  const runRulesPath = String(data.run_rules ?? "");
+  if (runRulesPath.trim()) {
+    try {
+      runRules = await readFile(join(configDir, runRulesPath.trim()), "utf-8");
+    } catch {
+      runRules = "";
+    }
+  }
+
+  return { models, maxTurns, runRules, configDir };
+}
+
+/**
+ * Load only the model registry part (backward-compat).
+ */
+export async function loadRegistry(path: string): Promise<RegistryModel[]> {
+  const config = await loadConfig(path);
+  return config.models;
+}
+
+

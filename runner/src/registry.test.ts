@@ -5,34 +5,28 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadRegistry } from "./registry";
 
-function createTempFile(content: unknown): string {
+function createTempFile(content: string): string {
   const dir = mkdtempSync(join(tmpdir(), "registry-test-"));
-  const path = join(dir, "models.registry.json");
-  writeFileSync(path, JSON.stringify(content), "utf-8");
+  const path = join(dir, "config.toml");
+  writeFileSync(path, content, "utf-8");
   return path;
 }
 
 function cleanup(path: string) {
-  try {
-    unlinkSync(path);
-  } catch {
-    // ignore cleanup errors
-  }
+  try { unlinkSync(path); } catch { /* ignore */ }
 }
 
 describe("loadRegistry", () => {
   it("loads a valid registry file", async () => {
-    const fixture = {
-      models: [
-        {
-          name: "test-model",
-          provider: "llamacpp-local",
-          modelId: "test-model-id",
-          params: { temp: 0.7 },
-          notes: "a test model",
-        },
-      ],
-    };
+    const fixture = `
+[[models]]
+name = "test-model"
+provider = "llamacpp-local"
+modelId = "test-model-id"
+notes = "a test model"
+[models.params]
+temp = 0.7
+`;
     const path = createTempFile(fixture);
     try {
       const models = await loadRegistry(path);
@@ -48,12 +42,17 @@ describe("loadRegistry", () => {
   });
 
   it("rejects duplicate names", async () => {
-    const fixture = {
-      models: [
-        { name: "same-name", provider: "p1", modelId: "m1" },
-        { name: "same-name", provider: "p2", modelId: "m2" },
-      ],
-    };
+    const fixture = `
+[[models]]
+name = "same-name"
+provider = "p1"
+modelId = "m1"
+
+[[models]]
+name = "same-name"
+provider = "p2"
+modelId = "m2"
+`;
     const path = createTempFile(fixture);
     try {
       await expect(loadRegistry(path)).rejects.toThrow('duplicate name "same-name"');
@@ -63,11 +62,11 @@ describe("loadRegistry", () => {
   });
 
   it("rejects an entry missing modelId", async () => {
-    const fixture = {
-      models: [
-        { name: "valid-name", provider: "p1" },
-      ],
-    };
+    const fixture = `
+[[models]]
+name = "valid-name"
+provider = "p1"
+`;
     const path = createTempFile(fixture);
     try {
       await expect(loadRegistry(path)).rejects.toThrow('"modelId" must be a non-empty string');
@@ -77,11 +76,12 @@ describe("loadRegistry", () => {
   });
 
   it("defaults params to {} when omitted", async () => {
-    const fixture = {
-      models: [
-        { name: "no-params", provider: "p1", modelId: "m1" },
-      ],
-    };
+    const fixture = `
+[[models]]
+name = "no-params"
+provider = "p1"
+modelId = "m1"
+`;
     const path = createTempFile(fixture);
     try {
       const models = await loadRegistry(path);
@@ -93,11 +93,12 @@ describe("loadRegistry", () => {
   });
 
   it("rejects a path-unsafe name", async () => {
-    const fixture = {
-      models: [
-        { name: "bad name/slash", provider: "p1", modelId: "m1" },
-      ],
-    };
+    const fixture = `
+[[models]]
+name = "bad name/slash"
+provider = "p1"
+modelId = "m1"
+`;
     const path = createTempFile(fixture);
     try {
       await expect(loadRegistry(path)).rejects.toThrow('"name" must be path-safe');

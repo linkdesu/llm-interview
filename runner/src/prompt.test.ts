@@ -58,20 +58,33 @@ describe("buildPrompt", () => {
     expect(lastPart).toContain(ARTIFACT_CONTRACT);
   });
 
-  it("orders sections correctly: intent → spec → tickets → contract", () => {
+  it("orders sections correctly: intent → spec → tickets → rules → contract", () => {
     const question: Question = {
       ...baseQuestion,
       hasSpec: true,
       hasTickets: true,
     };
-    const prompt = buildPrompt(question);
+    const prompt = buildPrompt(question, "Global test rule.");
     const intentIndex = prompt.indexOf("Build a landing page");
     const specIndex = prompt.indexOf("./spec.md");
     const ticketsIndex = prompt.indexOf("./tickets.md");
+    const rulesIndex = prompt.indexOf("Global test rule.");
     const contractIndex = prompt.indexOf(ARTIFACT_CONTRACT);
 
     expect(intentIndex).toBeLessThan(specIndex);
     expect(specIndex).toBeLessThan(ticketsIndex);
-    expect(ticketsIndex).toBeLessThan(contractIndex);
+    expect(ticketsIndex).toBeLessThan(rulesIndex);
+    expect(rulesIndex).toBeLessThan(contractIndex);
+  });
+
+  it("includes global rules when provided", () => {
+    const prompt = buildPrompt(baseQuestion, "Use skill X for testing.");
+    expect(prompt).toContain("Use skill X for testing.");
+  });
+
+  it("omits global rules when empty", () => {
+    const prompt = buildPrompt(baseQuestion);
+    const lastSection = prompt.split("---").pop()!;
+    expect(lastSection).toContain(ARTIFACT_CONTRACT);
   });
 });
