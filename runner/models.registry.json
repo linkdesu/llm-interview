@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "name": "qwen3.6-27b-fable-fusion-q5",
+      "provider": "llamacpp-local",
+      "modelId": "qwen3.6-27b-fable-fusion-q5",
+      "params": {
+        "thinking": "off",
+        "temp": 0.7,
+        "top_k": 20,
+        "top_p": 0.95
+      },
+      "notes": "llama.cpp server-side sampling defaults recorded for archival purposes"
+    }
+  ]
+}
