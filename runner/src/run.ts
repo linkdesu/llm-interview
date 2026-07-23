@@ -192,8 +192,12 @@ async function stripSessionImageData(archiveDir: string): Promise<void> {
   }).join("\n");
 
   if (cleaned !== content) {
+    const before = content.length;
     await writeFile(sessionPath, cleaned, "utf-8");
-    log(`stripped image data from session.jsonl`);
+    const after = (await readFile(sessionPath, "utf-8")).length;
+    log(`stripped image data from session.jsonl (${(before / 1024).toFixed(0)}KB -> ${(after / 1024).toFixed(0)}KB)`);
+  } else {
+    log(`no image data to strip in session.jsonl`);
   }
 }
 
