@@ -6,8 +6,10 @@ import {
   rename,
   copyFile,
   stat,
+  symlink,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { homedir } from "node:os";
 import type { Question } from "./question";
 
 const log = (msg: string) => {
@@ -17,8 +19,12 @@ const log = (msg: string) => {
 type Section = "idle" | "thinking" | "tool" | "response";
 let aiSection: Section = "idle";
 let aiStarted = false;
+let turnCount = 0;
+let maxTurnsExceeded = false;
+const MAX_TURNS = 100;
 
 const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
+const yellow = (s: string) => `\x1b[33m${s}\x1b[39m`;
 const reset = "\x1b[0m";
 const bold = (s: string) => `\x1b[1m${s}\x1b[22m`;
 
@@ -46,6 +52,29 @@ function switchSection(section: Section): void {
   sectionHeader(labels[section]);
 }
 
+function formatArgs(toolName: string, args: unknown): string {
+  if (!args || typeof args !== "object") return String(args ?? "");
+  const a = args as Record<string, unknown>;
+  switch (toolName) {
+    case "read":
+      return String(a.filePath ?? a.path ?? a.file ?? "");
+    case "write":
+    case "edit": {
+      const path = a.filePath ?? a.path ?? a.file ?? "";
+      const preview = toolName === "write"
+        ? String(a.content ?? a.data ?? "").slice(0, 60).replace(/\n/g, "\\n")
+        : String(a.oldString ?? "").slice(0, 60).replace(/\n/g, "\\n");
+      return `${path}${preview ? "\n    " + preview + (String(a.content ?? "").length > 60 ? "..." : "") : ""}`;
+    }
+    case "bash":
+      return String(a.command ?? "");
+    case "grep":
+      return `${a.pattern ?? ""}${a.path ? " in " + a.path : ""}`;
+    default:
+      return JSON.stringify(args).slice(0, 200);
+  }
+}
+
 function renderJsonEvent(line: string): void {
   let event: Record<string, unknown>;
   try {
@@ -53,30 +82,114 @@ function renderJsonEvent(line: string): void {
   } catch {
     return;
   }
+  const t = event.type as string;
 
-  if (event.type === "message_update") {
+  // --- Assistant message events ---
+  if (t === "message_update") {
     const ev = event.assistantMessageEvent as Record<string, unknown> | undefined;
     if (!ev || typeof ev !== "object") return;
-    if (ev.type === "thinking_delta") {
-      switchSection("thinking");
-      process.stdout.write(String(ev.delta ?? ""));
-    } else if (ev.type === "text_delta") {
-      switchSection("response");
-      process.stdout.write(String(ev.delta ?? ""));
-    } else if (ev.type === "tool_use") {
-      const name = ev.toolName ?? ev.name ?? "?";
-      switchSection("tool");
-      process.stdout.write(`${dim("  \u2514 Tool:")} ${name}${reset}\n`);
+    switch (ev.type) {
+      case "thinking_delta":
+        switchSection("thinking");
+        process.stdout.write(String(ev.delta ?? ""));
+        return;
+      case "text_delta":
+        switchSection("response");
+        process.stdout.write(String(ev.delta ?? ""));
+        return;
+      case "tool_use": {
+        const name = ev.toolName ?? ev.name ?? "?";
+        const argsStr = formatArgs(name, ev.input ?? ev.args);
+        switchSection("tool");
+        process.stdout.write(`${dim("  \u203a")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
+        return;
+      }
     }
-  } else if (event.type === "tool_start") {
-    const name = event.toolName ?? event.name ?? "?";
+    return;
+  }
+
+  // --- Tool execution ---
+  if (t === "tool_execution_start") {
+    const name = event.toolName as string ?? "?";
+    const argsStr = formatArgs(name, event.args);
     switchSection("tool");
-    process.stdout.write(`${dim("  \u2514 Tool:")} ${name}${reset}\n`);
-  } else if (event.type === "tool_end") {
-    const name = event.toolName ?? event.name ?? "?";
-    const result = event.result as string ?? event.output as string ?? "";
-    const preview = String(result).slice(0, 300).replace(/\n/g, " ");
-    process.stdout.write(`${dim("  \u2514 Done:")} ${name}${preview ? dim(" \u2014 ") + preview : ""}${reset}\n`);
+    process.stdout.write(`${dim("  \u203a")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
+    return;
+  }
+  if (t === "tool_execution_update") {
+    const preview = event.partialResult != null
+      ? JSON.stringify(event.partialResult).slice(0, 200).replace(/\n/g, " ")
+      : "";
+    if (preview) process.stdout.write(`    ${dim(preview)}\n`);
+    return;
+  }
+  if (t === "tool_execution_end") {
+    const name = event.toolName as string ?? "?";
+    const isError = event.isError === true;
+    if (isError) {
+      process.stdout.write(`${dim("  \u203a")} ${name} ${dim("\u2014 failed")}\n`);
+    }
+    return;
+  }
+
+  // --- Turn lifecycle ---
+  if (t === "turn_start") {
+    turnCount++;
+    if (turnCount > MAX_TURNS) {
+      maxTurnsExceeded = true;
+    }
+    return;
+  }
+  if (t === "turn_end") {
+    const results = event.toolResults as Array<unknown> | undefined;
+    if (results && results.length > 0) {
+      switchSection("tool");
+      process.stdout.write(`${dim(`  \u203a turn ${turnCount} (${results.length} tools)`)}${reset}\n`);
+    }
+    return;
+  }
+
+  // --- Queue / planning ---
+  if (t === "queue_update") {
+    const steering = event.steering as string[] | undefined;
+    if (steering && steering.length > 0) {
+      aiSeparator();
+      process.stdout.write(`\n${dim("  \u21b3 plan:")} ${bold(steering.join(dim(" \u2192 ")))}\n`);
+    }
+    return;
+  }
+
+  // --- Compaction (context window management) ---
+  if (t === "compaction_start") {
+    aiSeparator();
+    const reason = String(event.reason ?? "threshold");
+    process.stdout.write(`\n${yellow(`  \u26a0 compressing context (${reason})...`)}\n`);
+    return;
+  }
+  if (t === "compaction_end") {
+    if (event.aborted) {
+      process.stdout.write(`${yellow("  \u26a0 compression aborted")}\n`);
+    } else {
+      process.stdout.write(`${dim("  \u2713 context compressed")}\n`);
+    }
+    return;
+  }
+
+  // --- Auto-retry ---
+  if (t === "auto_retry_start") {
+    const attempt = Number(event.attempt ?? 1);
+    const maxAttempts = Number(event.maxAttempts ?? 3);
+    const delaySec = (Number(event.delayMs ?? 0) / 1000).toFixed(1);
+    process.stdout.write(`${yellow("  \u26a0 API error")} ${bold(String(event.errorMessage ?? ""))} ${dim(`retrying ${attempt}/${maxAttempts} (${delaySec}s)...`)}\n`);
+    return;
+  }
+  if (t === "auto_retry_end") {
+    if (event.success === true) {
+      process.stdout.write(`${dim("  \u2713 retry succeeded")}\n`);
+    } else {
+      process.stdout.write(`${yellow("  \u26a0 retry failed:")} ${String(event.finalError ?? "")}\n`);
+    }
+    return;
   }
 }
 
@@ -141,6 +254,12 @@ export interface PiRunResult {
  * - Renames the session JSONL file to session.jsonl.
  */
 export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
+  // Reset module state for this run
+  aiSection = "idle";
+  aiStarted = false;
+  turnCount = 0;
+  maxTurnsExceeded = false;
+
   const {
     prompt,
     question,
@@ -179,6 +298,20 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   // Path for capturing stdout+stderr
   const stdoutFile = join(workdir, "pi-output.log");
 
+  // Link chrome-devtools-axi skill into workdir for HTML page testing
+  const skillsDir = join(workdir, ".skills");
+  const chromeDevToolsSkillSrc = join(homedir(), ".agents", "skills", "chrome-devtools-axi", "SKILL.md");
+  const chromeDevToolsSkillDst = join(skillsDir, "chrome-devtools-axi", "SKILL.md");
+  let extraArgs: string[] = [];
+  try {
+    await mkdir(join(skillsDir, "chrome-devtools-axi"), { recursive: true });
+    await symlink(chromeDevToolsSkillSrc, chromeDevToolsSkillDst);
+    extraArgs = ["--skill", chromeDevToolsSkillDst];
+    log(`linked chrome-devtools-axi skill`);
+  } catch {
+    log(`chrome-devtools-axi skill not available, skipping`);
+  }
+
   // Build the pi command arguments
   const args: string[] = [
     "-p",
@@ -186,6 +319,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     "json",
     "--no-extensions",
     "--no-skills",
+    ...extraArgs,
     "--no-prompt-templates",
     "--no-themes",
     "--no-context-files",
@@ -235,6 +369,12 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     for (const line of lines) {
       if (line.trim().length === 0) continue;
       renderJsonEvent(line);
+      if (maxTurnsExceeded) {
+        log(`max turns exceeded (${turnCount}), killing process`);
+        child.kill("SIGKILL");
+        maxTurnsExceeded = false; // prevent repeated kills
+        break;
+      }
     }
   });
 

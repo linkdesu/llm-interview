@@ -153,6 +153,7 @@ function validateArtifactContract(files: string[]): string[] {
     "pi-output.log",
     "spec.md",
     "tickets.md",
+    ".skills",
   ]);
   for (const f of actual) {
     if (!expected.has(f) && !allowedExtras.has(f)) {
