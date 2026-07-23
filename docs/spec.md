@@ -14,7 +14,7 @@ A three-part system:
 
 ## User Stories
 
-1. As a task author, I want to add a task as a directory under `question/` (directory name is the slug), so that I can accumulate test tasks over time.
+1. As a task author, I want to add a task as a directory under `question/` (the directory name serves as the Question's unique name), so that I can accumulate test tasks over time.
 2. As a task author, I want to write only `intent.md` in a Question, so that I can test the model's own planning ability.
 3. As a task author, I want to attach `spec.md`/`tickets.md` to a Question, so that I can test execution ability given a detailed spec.
 4. As a task author, I want spec/tickets handed to the model as file paths that it reads itself, so that the run mirrors how I actually talk to agents day to day.
@@ -48,8 +48,8 @@ A three-part system:
 - **Artifact contract**: exactly three files `index.html` / `style.css` / `script.js`; CSS/JS not inlined, not minified/obfuscated, kept readable; no other files. The runner validates the file list at collection time and flags violations in run.json (without blocking archival).
 - **Run isolation**: pi's cwd is a temp working directory outside the repo (a dedicated path under the system temp area); the Question's spec/tickets are copied in. Together with `--no-context-files`, the model cannot touch the project's AGENTS.md, other Sessions' artifacts under `session/`, or any project file. After the Run, the runner collects the transcript and the three artifact files into `session/<question>/<model>/<datetime>/`, then cleans up the temp directory.
 - **Session persistence**: pi is invoked with the isolated working directory as cwd, `--session-dir` pointing at that same directory and `--session-id session`, so pi writes `*_session.jsonl` directly (verified by smoke test); the file is normalized to `session.jsonl` at collection time.
-- **Model Registry**: a config file inside the runner project, manually maintained; fields include slug, provider, modelId, parameter snapshot (free-form keys such as thinking/temp/top_k/top_p), and notes. The registry both documents the pi model configuration and feeds run.json.
-- **run.json**: records question slug, model slug, parameter snapshot, comboId (hash(question+model+parameters)), pi version, start/end time, and exit status.
+- **Model Registry**: a config file inside the runner project, manually maintained; fields include name (unique kebab-case identifier), provider, modelId, parameter snapshot (free-form keys such as thinking/temp/top_k/top_p), and notes. The registry both documents the pi model configuration and feeds run.json.
+- **run.json**: records question name, model name, parameter snapshot, comboId (hash(question+model+parameters)), pi version, start/end time, and exit status.
 - **No sampling-parameter automation**: per ADR 0001 — parameters are server-side; the runner records but never controls them. thinking on/off comparison and other parameter dimensions are out of scope for now.
 - **Manifest build**: a standalone Bun script that scans the full `session/` history, groups by comboId, takes the latest Run per group, copies its session.jsonl / three artifact files / run.json into a flat directory inside the dashboard build output, and generates the Manifest (comboId → metadata + file paths).
 - **Dashboard information architecture**: two-level sidebar (question → model) + keyword filter; the main area shows matching Combos as side-by-side iframe previews (artifact-first), each labeled with model + parameter snapshot, with the transcript (JSONL rendered as a message timeline, thinking collapsed by default) expandable.

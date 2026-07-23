@@ -5,7 +5,7 @@ A showcase project for comparing AI agent generation quality: pi.dev builds smal
 ## Language
 
 **Question**:
-A directory under `question/` (directory name is the slug) containing `intent.md` (the task intent) plus optional `spec.md` and `tickets.md` (detailed spec and task breakdown produced from the intent via the grilling workflow). Deliberately omitting spec/tickets is a test scenario that probes the model's own planning ability.
+A directory under `question/` (the directory name serves as the Question's unique name) containing `intent.md` (the task intent) plus optional `spec.md` and `tickets.md` (detailed spec and task breakdown produced from the intent via the grilling workflow). Deliberately omitting spec/tickets is a test scenario that probes the model's own planning ability.
 _Avoid_: task, prompt file
 
 **Run**:

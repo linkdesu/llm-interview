@@ -3,6 +3,7 @@
 ## Rules
 
 - Regardless of the language used in conversation, all documents and code comments in this repository must be written in English for internationalization.
+- Commits made by an AI agent must explicitly bypass commit signing (`git -c commit.gpgsign=false commit ...`), since the 1Password SSH signer requires interactive authorization that an agent cannot provide.
 
 ## Agent skills
 
