@@ -2,7 +2,6 @@ import {
   describe,
   it,
   expect,
-  beforeAll,
   afterAll,
   beforeEach,
 } from "bun:test";
@@ -11,29 +10,19 @@ import {
   writeFile,
   readFile,
   readdir,
-  stat,
   rm,
   chmod,
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-import type { Question } from "./question";
+import type { RunJson } from "./run";
 
 // ---------------------------------------------------------------------------
 // Helper: create a temp root for each test suite
 // ---------------------------------------------------------------------------
 function makeTempRoot(): string {
   return join(tmpdir(), `llm-interview-test-${randomUUID()}`);
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const s = await stat(path);
-    return s.isFile();
-  } catch {
-    return false;
-  }
 }
 
 async function listDir(path: string): Promise<string[]> {
@@ -293,7 +282,7 @@ describe("runMatrix", () => {
       (await listDir(join(sessionRoot, "q-hello", "model-alpha")))[0]
     );
     const runJsonRaw = await readFile(join(archivePath, "run.json"), "utf-8");
-    const runJson = JSON.parse(runJsonRaw);
+    const runJson = JSON.parse(runJsonRaw) as RunJson;
 
     expect(runJson.question.name).toBe("q-hello");
     expect(runJson.model.name).toBe("model-alpha");
@@ -335,7 +324,7 @@ describe("runMatrix", () => {
       "model-alpha",
       (await listDir(join(sessionRoot, "q-counter", "model-alpha")))[0]
     );
-    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8"));
+    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
 
     expect(runJson.contractViolations).toEqual([]);
   });
@@ -427,7 +416,7 @@ describe("runMatrix", () => {
       (await listDir(join(sessionRoot, "q-hello", "model-alpha")))[0]
     );
     const runJsonRaw = await readFile(join(archivePath, "run.json"), "utf-8");
-    const runJson = JSON.parse(runJsonRaw);
+    const runJson = JSON.parse(runJsonRaw) as RunJson;
 
     expect(runJson.contractViolations).toBeDefined();
     expect(runJson.contractViolations.length).toBeGreaterThan(0);
@@ -445,8 +434,6 @@ describe("runMatrix", () => {
   // -----------------------------------------------------------------------
   it("deletes the isolated workdir after archiving", async () => {
     const { runMatrix } = await import("./run");
-
-    const initialRunDirs = await listDir(runTempRoot);
 
     await runMatrix({
       questionDir,
@@ -589,7 +576,7 @@ exit 0
       "model-alpha",
       (await listDir(join(sessionRoot, "q-hello", "model-alpha")))[0]
     );
-    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8"));
+    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
 
     expect(
       runJson.contractViolations.some((v: string) => v.includes("missing expected artifact: style.css"))
@@ -638,7 +625,7 @@ exit 0
       "model-alpha",
       (await listDir(join(sessionRoot, "q-hello", "model-alpha")))[0]
     );
-    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8"));
+    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
 
     expect(
       runJson.contractViolations.some((v: string) => v.includes("missing transcript"))

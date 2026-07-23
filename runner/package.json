@@ -4,14 +4,20 @@
   "type": "module",
   "scripts": {
     "run": "bun src/run.ts",
-    "build:sessions": "bun src/build-sessions.ts"
+    "build:sessions": "bun src/build-sessions.ts",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.81.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "bun-types": "^1.3.14",
-    "typescript": "^7.0.2"
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.65.0"
   }
 }

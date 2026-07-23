@@ -5,11 +5,9 @@ import type { Question } from "./question";
  * Defines the exact file structure and constraints the agent must follow.
  */
 export const ARTIFACT_CONTRACT = `Artifact contract:
-- Create EXACTLY three files in the current working directory: index.html, style.css, script.js.
-- No other files may be created.
-- All CSS must go in style.css; all JavaScript must go in script.js.
-- Do not inline CSS or JavaScript into index.html.
-- Code must be hand-readable; never minified or obfuscated.`;
+- ONLY the three files should be kept in the working directory at last: index.html, style.css, script.js.
+- Other temporary files can be created and used during the process, but MUST be deleted afterward.
+- All code must be readable; never minified or obfuscated.`;
 
 /**
  * Build a prompt for a coding agent from a Question.

@@ -5,9 +5,8 @@ import {
   rm,
   readFile,
   access,
-  rename,
 } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pid } from "node:process";
 import type { Question } from "./question";

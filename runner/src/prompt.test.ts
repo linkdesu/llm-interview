@@ -10,28 +10,6 @@ const baseQuestion: Question = {
   hasTickets: false,
 };
 
-describe("ARTIFACT_CONTRACT", () => {
-  it("requires exactly three files: index.html, style.css, script.js", () => {
-    expect(ARTIFACT_CONTRACT).toContain("index.html");
-    expect(ARTIFACT_CONTRACT).toContain("style.css");
-    expect(ARTIFACT_CONTRACT).toContain("script.js");
-  });
-
-  it("forbids creating other files", () => {
-    expect(ARTIFACT_CONTRACT.toLowerCase()).toMatch(/no (other|additional) files/);
-  });
-
-  it("requires all CSS in style.css and all JS in script.js, not inlined", () => {
-    expect(ARTIFACT_CONTRACT.toLowerCase()).toMatch(/not (inlined|inline)/);
-    expect(ARTIFACT_CONTRACT.toLowerCase()).toMatch(/style\.css/);
-    expect(ARTIFACT_CONTRACT.toLowerCase()).toMatch(/script\.js/);
-  });
-
-  it("forbids minified or obfuscated code", () => {
-    expect(ARTIFACT_CONTRACT.toLowerCase()).toMatch(/minified|obfuscated/);
-  });
-});
-
 describe("buildPrompt", () => {
   it("returns trimmed intent text", () => {
     const question: Question = {

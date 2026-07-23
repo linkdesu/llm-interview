@@ -60,6 +60,42 @@ export interface RunComboOutcome {
 }
 
 /**
+ * Shape of the run.json file written for each archived session.
+ */
+export interface RunJson {
+  /** Question metadata. */
+  question: {
+    name: string;
+    hasSpec: boolean;
+    hasTickets: boolean;
+  };
+  /** Model metadata. */
+  model: {
+    name: string;
+    provider: string;
+    modelId: string;
+  };
+  /** Sampling parameter snapshot used for this run. */
+  params: Record<string, string | number | boolean>;
+  /** Sha256-based combo ID (first 12 hex chars). */
+  comboId: string;
+  /** Pi version string. */
+  piVersion: string;
+  /** ISO timestamp when the run started. */
+  startedAt: string;
+  /** ISO timestamp when the run ended. */
+  endedAt: string;
+  /** Duration in milliseconds. */
+  durationMs: number;
+  /** Run status: "ok", "timeout", or "error". */
+  status: "ok" | "timeout" | "error";
+  /** Exit code from pi, or null if killed by timeout. */
+  exitCode: number | null;
+  /** Artifact contract violation messages (empty if compliant). */
+  contractViolations: string[];
+}
+
+/**
  * Format a timestamp as YYYYMMDD-HHmmss using local time.
  */
 function formatTimestamp(date: Date): string {
@@ -90,7 +126,8 @@ function computeComboId(
 /**
  * Check the artifact contract: exactly index.html, style.css, script.js.
  * Returns an array of violation messages (empty if compliant).
- */function validateArtifactContract(files: string[]): string[] {
+ */
+function validateArtifactContract(files: string[]): string[] {
   const violations: string[] = [];
   const expected = new Set(["index.html", "style.css", "script.js"]);
   const actual = new Set(files);
@@ -213,8 +250,8 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       const startedAt = new Date().toISOString();
 
       let status: "ok" | "timeout" | "error" = "ok";
-      let exitCode: number | null = null;
-      let durationMs = 0;
+      let exitCode: number | null;
+      let durationMs: number;
 
       try {
         // Build prompt for this question
@@ -266,7 +303,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         const endedAt = new Date().toISOString();
 
         // Write run.json
-        const runJson = {
+        const runJson: RunJson = {
           question: {
             name: question.name,
             hasSpec: question.hasSpec,
