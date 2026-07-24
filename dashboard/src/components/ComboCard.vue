@@ -65,12 +65,15 @@ async function toggleTranscript() {
       </p>
     </header>
 
+    <!-- allow-same-origin is required: without it the iframe gets an opaque
+         origin and <script type="module"> artifacts fail their CORS check.
+         The sandbox still blocks top navigation, popups, forms, etc. -->
     <iframe
       v-if="combo.files.artifact"
       class="artifact-frame"
       :src="combo.files.artifact"
       :title="comboLabel(combo)"
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-same-origin"
     ></iframe>
     <div v-else class="artifact-placeholder">No artifact for this run</div>
 
