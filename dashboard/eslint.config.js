@@ -4,7 +4,7 @@ import pluginVue from "eslint-plugin-vue";
 import globals from "globals";
 
 export default tseslint.config(
-  { ignores: ["dist/", "node_modules/", ".vite/"] },
+  { ignores: ["dist/", "node_modules/", ".vite/", "public/sessions/"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...pluginVue.configs["flat/essential"],
