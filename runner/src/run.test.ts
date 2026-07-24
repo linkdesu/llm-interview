@@ -661,4 +661,58 @@ exit 0
       runJson.contractViolations.some((v: string) => v.includes("missing transcript"))
     ).toBe(true);
   });
+
+  // -----------------------------------------------------------------------
+  // Test 12: Base64 image data is stripped from the archived session.jsonl
+  // -----------------------------------------------------------------------
+  it("strips base64 image data from the archived session.jsonl", async () => {
+    const { runMatrix } = await import("./run");
+
+    // Stub that writes a session.jsonl containing an image content item
+    const imageStub = join(tempRoot, "stub-pi-image");
+    await writeFile(
+      imageStub,
+      `#!/usr/bin/env bash
+cat > session.jsonl <<'JSONL'
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"look at this"},{"type":"image","data":"iVBORw0KGgoAAAANSUhEUg","mimeType":"image/png"}]}}
+JSONL
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+exit 0
+`,
+      "utf-8"
+    );
+    await chmod(imageStub, 0o755);
+
+    await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: imageStub,
+      piHome,
+      tempRoot: runTempRoot,
+      timeoutMs: 30000,
+      questionFilter: ["q-hello"],
+      modelFilter: ["alpha.gguf"],
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    const archivePath = join(
+      sessionRoot,
+      "q-hello",
+      "model-alpha",
+      (await listDir(join(sessionRoot, "q-hello", "model-alpha")))[0]
+    );
+    const sessionRaw = await readFile(join(archivePath, "session.jsonl"), "utf-8");
+
+    expect(sessionRaw).not.toContain("iVBORw0KGgoAAAANSUhEUg");
+    expect(sessionRaw).toContain('"data":"[stripped]"');
+    // Non-image content must survive untouched
+    expect(sessionRaw).toContain("look at this");
+  });
+
+  // -----------------------------------------------------------------------
 });

@@ -1,6 +1,7 @@
 import {
   mkdir,
   writeFile,
+  readFile,
   readdir,
   copyFile,
   rm,
@@ -173,7 +174,15 @@ function validateArtifactContract(files: string[]): string[] {
 async function stripSessionImageData(archiveDir: string): Promise<void> {
   const sessionPath = join(archiveDir, "session.jsonl");
   let content: string;
-  try { content = await readFile(sessionPath, "utf-8"); } catch { return; }
+  try {
+    content = await readFile(sessionPath, "utf-8");
+  } catch (err) {
+    // A missing transcript is fine (flagged elsewhere as a contract
+    // violation); anything else is a real failure and must be visible.
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return;
+    log(`failed to read session.jsonl for stripping: ${err}`);
+    return;
+  }
 
   const cleaned = content.split("\n").filter(Boolean).map((line) => {
     try {
