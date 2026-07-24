@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "main": "bun src/run.ts",
+    "manifest": "bun src/manifest.ts",
     "lint": "eslint ."
   },
   "dependencies": {
