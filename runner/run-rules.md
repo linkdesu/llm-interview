@@ -1,4 +1,4 @@
-# Global Run Rules
+# Run Rules
 
 These rules apply to every run, regardless of the question.
 
