@@ -67,6 +67,11 @@ export interface RunComboOutcome {
   status: "ok" | "timeout" | "error";
   /** Exit code from pi, or null if killed by timeout. */
   exitCode: number | null;
+  /**
+   * True if the run was killed for exceeding the max turn limit —
+   * usually a sign the agent looped or could not solve the task.
+   */
+  maxTurnsExceeded: boolean;
 }
 
 /**
@@ -101,6 +106,16 @@ export interface RunJson {
   status: "ok" | "timeout" | "error";
   /** Exit code from pi, or null if killed by timeout. */
   exitCode: number | null;
+  /**
+   * True if the run was killed for exceeding the max turn limit —
+   * usually a sign the agent looped or could not solve the task.
+   */
+  maxTurnsExceeded: boolean;
+  /**
+   * Effective max turn limit for this run (model-level override if set,
+   * otherwise the global config value).
+   */
+  maxTurns: number;
   /** Artifact contract violation messages (empty if compliant). */
   contractViolations: string[];
 }
@@ -328,6 +343,10 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       let status: "ok" | "timeout" | "error" = "ok";
       let exitCode: number | null;
       let durationMs: number;
+      let maxTurnsExceeded = false;
+      // A model may override the global max turn limit when it needs
+      // more attempts to finish a task.
+      const effectiveMaxTurns = model.maxTurns ?? maxTurns;
 
       try {
         // Build prompt for this question
@@ -344,11 +363,12 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           piHome,
           tempRoot,
           timeoutMs,
-          maxTurns,
+          maxTurns: effectiveMaxTurns,
         });
 
         durationMs = result.durationMs;
         exitCode = result.exitCode;
+        maxTurnsExceeded = result.maxTurnsExceeded;
 
         if (result.timedOut) {
           status = "timeout";
@@ -407,6 +427,8 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           durationMs,
           status,
           exitCode,
+          maxTurnsExceeded,
+          maxTurns: effectiveMaxTurns,
           contractViolations,
         };
 
@@ -430,6 +452,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           durationMs,
           status,
           exitCode,
+          maxTurnsExceeded,
         });
       } catch (err: unknown) {
         // Record the failure but continue with the matrix
@@ -453,6 +476,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           durationMs,
           status,
           exitCode,
+          maxTurnsExceeded,
         });
       }
 

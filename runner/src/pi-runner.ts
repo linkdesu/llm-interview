@@ -21,6 +21,7 @@ let aiSection: Section = "idle";
 let aiStarted = false;
 let turnCount = 0;
 let maxTurnsExceeded = false;
+let killedForMaxTurns = false;
 let maxTurns = 100;
 
 const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
@@ -234,6 +235,8 @@ export interface PiRunResult {
   exitCode: number | null;
   /** True if the process was killed due to timeout. */
   timedOut: boolean;
+  /** True if the process was killed because it exceeded the max turn limit. */
+  maxTurnsExceeded: boolean;
   /** Duration of the run in milliseconds. */
   durationMs: number;
   /**
@@ -261,6 +264,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   aiStarted = false;
   turnCount = 0;
   maxTurnsExceeded = false;
+  killedForMaxTurns = false;
   maxTurns = options.maxTurns;
 
   const {
@@ -379,10 +383,10 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     for (const line of lines) {
       if (line.trim().length === 0) continue;
       renderJsonEvent(line);
-      if (maxTurnsExceeded) {
+      if (maxTurnsExceeded && !killedForMaxTurns) {
         log(`max turns exceeded (${turnCount}), killing process`);
+        killedForMaxTurns = true;
         child.kill("SIGKILL");
-        maxTurnsExceeded = false; // prevent repeated kills
         break;
       }
     }
@@ -418,6 +422,8 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   }
   if (timedOut) {
     log(`timed out after ${elapsed}s`);
+  } else if (killedForMaxTurns) {
+    log(`killed after ${elapsed}s: max turns (${maxTurns}) exceeded`);
   } else {
     log(`exited with code ${exitCode} (${elapsed}s)`);
   }
@@ -466,6 +472,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     workdir,
     exitCode: timedOut ? null : exitCode,
     timedOut,
+    maxTurnsExceeded: killedForMaxTurns,
     durationMs,
     sessionFile,
     stdoutFile,

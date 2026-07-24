@@ -10,6 +10,11 @@ export interface RegistryModel {
   provider: string;
   modelId: string;
   params: Record<string, string | number | boolean>;
+  /**
+   * Optional per-model override of the global max turn limit.
+   * Give weaker models more turns to attempt the task.
+   */
+  maxTurns?: number;
   notes?: string;
 }
 
@@ -60,11 +65,24 @@ function validateModels(rawModels: unknown[]): RegistryModel[] {
       }
     }
 
+    let maxTurns: number | undefined;
+    if (entry.max_turns != null) {
+      if (
+        typeof entry.max_turns !== "number" ||
+        !Number.isInteger(entry.max_turns) ||
+        entry.max_turns < 1
+      ) {
+        throw new Error(`Invalid entry at ${label}: "max_turns" must be a positive integer`);
+      }
+      maxTurns = entry.max_turns;
+    }
+
     result.push({
       name,
       provider,
       modelId,
       params,
+      maxTurns,
       notes: typeof entry.notes === "string" ? entry.notes : undefined,
     });
   }

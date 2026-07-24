@@ -106,4 +106,53 @@ modelId = "m1"
       cleanup(path);
     }
   });
+
+  it("parses a per-model max_turns override", async () => {
+    const fixture = `
+[[models]]
+name = "slow-model"
+provider = "p1"
+modelId = "m1"
+max_turns = 250
+`;
+    const path = createTempFile(fixture);
+    try {
+      const models = await loadRegistry(path);
+      expect(models[0].maxTurns).toBe(250);
+    } finally {
+      cleanup(path);
+    }
+  });
+
+  it("leaves maxTurns undefined when omitted", async () => {
+    const fixture = `
+[[models]]
+name = "normal-model"
+provider = "p1"
+modelId = "m1"
+`;
+    const path = createTempFile(fixture);
+    try {
+      const models = await loadRegistry(path);
+      expect(models[0].maxTurns).toBeUndefined();
+    } finally {
+      cleanup(path);
+    }
+  });
+
+  it("rejects a non-positive max_turns override", async () => {
+    const fixture = `
+[[models]]
+name = "bad-model"
+provider = "p1"
+modelId = "m1"
+max_turns = 0
+`;
+    const path = createTempFile(fixture);
+    try {
+      await expect(loadRegistry(path)).rejects.toThrow('"max_turns" must be a positive integer');
+    } finally {
+      cleanup(path);
+    }
+  });
 });

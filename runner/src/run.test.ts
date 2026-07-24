@@ -38,7 +38,7 @@ async function listDir(path: string): Promise<string[]> {
 // ---------------------------------------------------------------------------
 async function writeFixtures(
   root: string,
-  models: Array<{ name: string; provider: string; modelId: string; params: Record<string, unknown> }>,
+  models: Array<{ name: string; provider: string; modelId: string; params: Record<string, unknown>; maxTurns?: number }>,
   questions: Array<{ name: string; intent: string; hasSpec?: boolean; hasTickets?: boolean }>
 ) {
   // Config (TOML)
@@ -47,11 +47,12 @@ async function writeFixtures(
     const paramsLines = Object.entries(m.params)
       .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
       .join("\n");
+    const maxTurnsLine = m.maxTurns != null ? `max_turns = ${m.maxTurns}\n` : "";
     return `[[models]]
 name = ${JSON.stringify(m.name)}
 provider = ${JSON.stringify(m.provider)}
 modelId = ${JSON.stringify(m.modelId)}
-[models.params]
+${maxTurnsLine}[models.params]
 ${paramsLines}`;
   }).join("\n\n");
   const configToml = `max_turns = 100\nrun_rules = ""\n\n${modelEntries}\n`;
@@ -309,6 +310,8 @@ describe("runMatrix", () => {
     expect(runJson.durationMs).toBeGreaterThan(0);
     expect(runJson.status).toBe("ok");
     expect(runJson.exitCode).toBe(0);
+    expect(runJson.maxTurnsExceeded).toBe(false);
+    expect(runJson.maxTurns).toBe(100);
     expect(runJson.contractViolations).toEqual([]);
     expect(runJson.comboId).toBeDefined();
     expect(runJson.comboId.length).toBe(12);
@@ -715,4 +718,114 @@ exit 0
   });
 
   // -----------------------------------------------------------------------
+  // Test 13: Exceeding the max turn limit is recorded in run.json
+  // -----------------------------------------------------------------------
+  it("records maxTurnsExceeded in run.json when the turn limit is hit", async () => {
+    const { runMatrix } = await import("./run");
+
+    // Stub that emits more turn_start events than the limit, then idles
+    // until the runner kills it.
+    const loopingStub = join(tempRoot, "stub-pi-looping");
+    await writeFile(
+      loopingStub,
+      `#!/usr/bin/env bash
+for i in 1 2 3 4 5; do echo '{"type":"turn_start"}'; done
+sleep 30
+`,
+      "utf-8"
+    );
+    await chmod(loopingStub, 0o755);
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: loopingStub,
+      piHome,
+      tempRoot: runTempRoot,
+      timeoutMs: 30000,
+      questionFilter: ["q-hello"],
+      modelFilter: ["alpha.gguf"],
+      piVersion: "test-1.0",
+      maxTurns: 2,
+      runRules: "",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].maxTurnsExceeded).toBe(true);
+    expect(results[0].status).not.toBe("ok");
+
+    const archivePath = join(
+      sessionRoot,
+      "q-hello",
+      "model-alpha",
+      (await listDir(join(sessionRoot, "q-hello", "model-alpha")))[0]
+    );
+    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
+    expect(runJson.maxTurnsExceeded).toBe(true);
+    expect(runJson.maxTurns).toBe(2);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 14: A model-level max_turns override wins over the global limit
+  // -----------------------------------------------------------------------
+  it("lets a model-level max_turns override win over the global limit", async () => {
+    const { runMatrix } = await import("./run");
+
+    // Separate repo fixture: one model with max_turns = 2, global stays 100
+    const repoDir2 = join(tempRoot, "repo-override");
+    await mkdir(repoDir2, { recursive: true });
+    const sessionRoot2 = join(repoDir2, "session");
+    const { configPath: configPath2, questionDir: questionDir2 } = await writeFixtures(
+      repoDir2,
+      [
+        {
+          name: "model-limited",
+          provider: "llamacpp-local",
+          modelId: "limited.gguf",
+          params: { temp: 0.7 },
+          maxTurns: 2,
+        },
+      ],
+      [{ name: "q-hello", intent: "Build a hello world page." }]
+    );
+
+    // Same looping stub: emits 5 turn_start events, then idles
+    const loopingStub = join(tempRoot, "stub-pi-looping-2");
+    await writeFile(
+      loopingStub,
+      `#!/usr/bin/env bash
+for i in 1 2 3 4 5; do echo '{"type":"turn_start"}'; done
+sleep 30
+`,
+      "utf-8"
+    );
+    await chmod(loopingStub, 0o755);
+
+    const results = await runMatrix({
+      questionDir: questionDir2,
+      configPath: configPath2,
+      sessionRoot: sessionRoot2,
+      piBin: loopingStub,
+      piHome,
+      tempRoot: runTempRoot,
+      timeoutMs: 30000,
+      piVersion: "test-1.0",
+      maxTurns: 100, // global limit — the model's max_turns = 2 must win
+      runRules: "",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].maxTurnsExceeded).toBe(true);
+
+    const archivePath = join(
+      sessionRoot2,
+      "q-hello",
+      "model-limited",
+      (await listDir(join(sessionRoot2, "q-hello", "model-limited")))[0]
+    );
+    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
+    expect(runJson.maxTurnsExceeded).toBe(true);
+    expect(runJson.maxTurns).toBe(2);
+  });
 });
