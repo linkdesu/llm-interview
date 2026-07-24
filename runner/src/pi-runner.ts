@@ -30,13 +30,13 @@ const reset = "\x1b[0m";
 const bold = (s: string) => `\x1b[1m${s}\x1b[22m`;
 
 function sectionHeader(label: string): void {
-  process.stdout.write(`\n${dim("\u2501".repeat(8))} ${bold(label)} ${dim("\u2501".repeat(8))}\n`);
+  process.stdout.write(`\n${dim("━".repeat(8))} ${bold(label)} ${dim("━".repeat(8))}\n`);
 }
 
 function aiSeparator(): void {
   if (!aiStarted) {
     aiStarted = true;
-    process.stdout.write(`\n${dim("\u2501".repeat(50))}\n`);
+    process.stdout.write(`\n${dim("━".repeat(50))}\n`);
   }
 }
 
@@ -102,7 +102,7 @@ function renderJsonEvent(line: string): void {
         const name = ev.toolName ?? ev.name ?? "?";
         const argsStr = formatArgs(name, ev.input ?? ev.args);
         switchSection("tool");
-        process.stdout.write(`${dim("  \u203a")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
+        process.stdout.write(`${dim("  ›")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
         return;
       }
     }
@@ -114,7 +114,7 @@ function renderJsonEvent(line: string): void {
     const name = event.toolName as string ?? "?";
     const argsStr = formatArgs(name, event.args);
     switchSection("tool");
-    process.stdout.write(`${dim("  \u203a")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
+    process.stdout.write(`${dim("  ›")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
     return;
   }
   if (t === "tool_execution_update") {
@@ -128,7 +128,7 @@ function renderJsonEvent(line: string): void {
     const name = event.toolName as string ?? "?";
     const isError = event.isError === true;
     if (isError) {
-      process.stdout.write(`${dim("  \u203a")} ${name} ${dim("\u2014 failed")}\n`);
+      process.stdout.write(`${dim("  ›")} ${name} ${dim("— failed")}\n`);
     }
     return;
   }
@@ -145,7 +145,7 @@ function renderJsonEvent(line: string): void {
     const results = event.toolResults as Array<unknown> | undefined;
     if (results && results.length > 0) {
       switchSection("tool");
-      process.stdout.write(`${dim(`  \u203a turn ${turnCount} (${results.length} tools)`)}${reset}\n`);
+      process.stdout.write(`${dim(`  › turn ${turnCount} (${results.length} tools)`)}${reset}\n`);
     }
     return;
   }
@@ -155,7 +155,7 @@ function renderJsonEvent(line: string): void {
     const steering = event.steering as string[] | undefined;
     if (steering && steering.length > 0) {
       aiSeparator();
-      process.stdout.write(`\n${dim("  \u21b3 plan:")} ${bold(steering.join(dim(" \u2192 ")))}\n`);
+      process.stdout.write(`\n${dim("  ↳ plan:")} ${bold(steering.join(dim(" → ")))}\n`);
     }
     return;
   }
@@ -164,14 +164,14 @@ function renderJsonEvent(line: string): void {
   if (t === "compaction_start") {
     aiSeparator();
     const reason = String(event.reason ?? "threshold");
-    process.stdout.write(`\n${yellow(`  \u26a0 compressing context (${reason})...`)}\n`);
+    process.stdout.write(`\n${yellow(`  ⚠ compressing context (${reason})...`)}\n`);
     return;
   }
   if (t === "compaction_end") {
     if (event.aborted) {
-      process.stdout.write(`${yellow("  \u26a0 compression aborted")}\n`);
+      process.stdout.write(`${yellow("  ⚠ compression aborted")}\n`);
     } else {
-      process.stdout.write(`${dim("  \u2713 context compressed")}\n`);
+      process.stdout.write(`${dim("  ✓ context compressed")}\n`);
     }
     return;
   }
@@ -181,14 +181,14 @@ function renderJsonEvent(line: string): void {
     const attempt = Number(event.attempt ?? 1);
     const maxAttempts = Number(event.maxAttempts ?? 3);
     const delaySec = (Number(event.delayMs ?? 0) / 1000).toFixed(1);
-    process.stdout.write(`${yellow("  \u26a0 API error")} ${bold(String(event.errorMessage ?? ""))} ${dim(`retrying ${attempt}/${maxAttempts} (${delaySec}s)...`)}\n`);
+    process.stdout.write(`${yellow("  ⚠ API error")} ${bold(String(event.errorMessage ?? ""))} ${dim(`retrying ${attempt}/${maxAttempts} (${delaySec}s)...`)}\n`);
     return;
   }
   if (t === "auto_retry_end") {
     if (event.success === true) {
-      process.stdout.write(`${dim("  \u2713 retry succeeded")}\n`);
+      process.stdout.write(`${dim("  ✓ retry succeeded")}\n`);
     } else {
-      process.stdout.write(`${yellow("  \u26a0 retry failed:")} ${String(event.finalError ?? "")}\n`);
+      process.stdout.write(`${yellow("  ⚠ retry failed:")} ${String(event.finalError ?? "")}\n`);
     }
     return;
   }
@@ -404,7 +404,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   if (aiStarted) {
-    process.stdout.write(`\n${dim("\u2501".repeat(50))}\n\n`);
+    process.stdout.write(`\n${dim("━".repeat(50))}\n\n`);
   }
   if (killedForMaxTurns) {
     log(`killed after ${elapsed}s: max turns (${maxTurns}) exceeded`);

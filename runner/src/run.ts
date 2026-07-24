@@ -317,7 +317,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   const filteredModels = applyNameFilter(models, modelFilter, "model", (m) => m.modelId);
   const filteredQuestions = applyNameFilter(questions, questionFilter, "question", (q) => q.name);
   if (filteredModels.length !== models.length || filteredQuestions.length !== questions.length) {
-    log(`filtered to ${filteredModels.length} models \u00d7 ${filteredQuestions.length} questions = ${filteredModels.length * filteredQuestions.length} combos`);
+    log(`filtered to ${filteredModels.length} models × ${filteredQuestions.length} questions = ${filteredModels.length * filteredQuestions.length} combos`);
   }
 
   // Pre-compute the full combo list for progress tracking
@@ -340,7 +340,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       const startedAt = new Date().toISOString();
 
       const comboIndex = comboPlan.findIndex((c) => c.comboId === comboId) + 1;
-      const label = `${question.name} \u00d7 ${model.name}`;
+      const label = `${question.name} × ${model.name}`;
 
       progress(`\n=== Combo ${comboIndex}/${total} ===`);
       progress(`Starting: ${label}`);
@@ -484,7 +484,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
       completed.add(comboId);
       const durSec = ((Date.now() - Date.parse(startedAt)) / 1000).toFixed(1);
-      const statusIcon = status === "ok" ? "\u2705" : "\u274c";
+      const statusIcon = status === "ok" ? "✅" : "❌";
       progress(`=== Combo ${comboIndex}/${total} Done: ${statusIcon} ${status.toUpperCase()} (${durSec}s) ===`);
 
       // Print progress overview
@@ -493,10 +493,10 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         if (completed.has(plan.comboId)) {
           const o = outcomes.find((r) => r.comboId === plan.comboId)!;
           const d = (o.durationMs / 1000).toFixed(1);
-          const ic = o.status === "ok" ? "\u2705" : "\u274c";
-          lines.push(`  ${ic} ${plan.question.name} \u00d7 ${plan.model.name}  ${o.status.toUpperCase()}  ${d}s`);
+          const ic = o.status === "ok" ? "✅" : "❌";
+          lines.push(`  ${ic} ${plan.question.name} × ${plan.model.name}  ${o.status.toUpperCase()}  ${d}s`);
         } else {
-          lines.push(`  \u23f3 ${plan.question.name} \u00d7 ${plan.model.name}  pending`);
+          lines.push(`  ⏳ ${plan.question.name} × ${plan.model.name}  pending`);
         }
       }
       progress(lines.join("\n"));
