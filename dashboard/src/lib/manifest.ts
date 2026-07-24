@@ -43,33 +43,53 @@ export interface Manifest {
   combos: ComboEntry[]
 }
 
-export interface SidebarModelEntry {
-  comboId: string
+export interface QuestionSummary {
   name: string
-}
-
-export interface SidebarQuestion {
-  name: string
-  models: SidebarModelEntry[]
+  /** Model names that ran this question, sorted alphabetically. */
+  models: string[]
+  sessionCount: number
+  /** End time of the latest run across this question's combos. */
+  latestEndedAt: string
 }
 
 /**
- * Group combos into the two-level sidebar tree (question → model).
- * Questions and models are sorted alphabetically by name.
+ * Group combos into the home-page question index: one row per question with
+ * its models, session count and latest run time. Questions are sorted
+ * alphabetically by name.
  */
-export function buildSidebarTree(combos: ComboEntry[]): SidebarQuestion[] {
-  const byQuestion = new Map<string, SidebarModelEntry[]>()
+export function summarizeQuestions(combos: ComboEntry[]): QuestionSummary[] {
+  const byQuestion = new Map<string, ComboEntry[]>()
   for (const combo of combos) {
     const entries = byQuestion.get(combo.question.name) ?? []
-    entries.push({ comboId: combo.comboId, name: combo.model.name })
+    entries.push(combo)
     byQuestion.set(combo.question.name, entries)
   }
   return [...byQuestion.entries()]
-    .map(([name, models]) => ({
+    .map(([name, entries]) => ({
       name,
-      models: models.sort((a, b) => a.name.localeCompare(b.name)),
+      models: entries.map((entry) => entry.model.name).sort((a, b) => a.localeCompare(b)),
+      sessionCount: entries.length,
+      latestEndedAt: entries.reduce((max, entry) => (entry.endedAt > max ? entry.endedAt : max), ''),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export interface ManifestStats {
+  questionCount: number
+  /** Distinct model names across all combos. */
+  modelCount: number
+  sessionCount: number
+  totalDurationMs: number
+}
+
+/** Hero statistics: distinct questions and models, session count, total run time. */
+export function summarizeManifest(combos: ComboEntry[]): ManifestStats {
+  return {
+    questionCount: new Set(combos.map((combo) => combo.question.name)).size,
+    modelCount: new Set(combos.map((combo) => combo.model.name)).size,
+    sessionCount: combos.length,
+    totalDurationMs: combos.reduce((sum, combo) => sum + combo.durationMs, 0),
+  }
 }
 
 /**
@@ -101,4 +121,9 @@ export function formatDuration(durationMs: number): string {
 /** Human-readable combo label, used for card headers and iframe titles. */
 export function comboLabel(combo: ComboEntry): string {
   return `${combo.question.name} / ${combo.model.name}`
+}
+
+/** Format a sampling parameter value for display (strings as-is, others as JSON). */
+export function formatParam(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value)
 }

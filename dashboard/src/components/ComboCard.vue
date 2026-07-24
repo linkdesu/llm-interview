@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { comboLabel, formatDuration, type ComboEntry } from '../lib/manifest'
 import { parseTranscript, type TranscriptItem } from '../lib/transcript'
+import { routeHash } from '../lib/router'
 import TranscriptTimeline from './TranscriptTimeline.vue'
 
 const props = defineProps<{
@@ -16,9 +17,7 @@ type TranscriptState =
 
 const transcript = ref<TranscriptState>({ status: 'collapsed' })
 
-function formatParam(value: unknown): string {
-  return typeof value === 'string' ? value : JSON.stringify(value)
-}
+const expandHash = computed(() => routeHash({ name: 'session', comboId: props.combo.comboId }))
 
 async function toggleTranscript() {
   if (transcript.value.status !== 'collapsed') {
@@ -44,22 +43,15 @@ async function toggleTranscript() {
 <template>
   <article class="combo-card">
     <header class="combo-header">
-      <div class="combo-title">
-        <strong>{{ combo.model.name }}</strong>
+      <div class="combo-top">
+        <span class="status-dot" :data-status="combo.status"></span>
+        <strong class="combo-model">{{ combo.model.name }}</strong>
         <span class="combo-provider">{{ combo.model.provider }}</span>
+        <span class="micro combo-duration">{{ formatDuration(combo.durationMs) }}</span>
       </div>
-      <div class="combo-params">
-        <span v-for="(value, key) in combo.params" :key="key" class="param-chip">
-          {{ key }}={{ formatParam(value) }}
-        </span>
-      </div>
-      <div class="combo-meta">
-        <span class="combo-status" :data-status="combo.status">{{ combo.status }}</span>
-        <span>{{ formatDuration(combo.durationMs) }}</span>
-        <span v-if="combo.maxTurnsExceeded" class="combo-warning">
-          max turns ({{ combo.maxTurns }}) exceeded
-        </span>
-      </div>
+      <p v-if="combo.maxTurnsExceeded" class="combo-warning">
+        max turns ({{ combo.maxTurns }}) exceeded
+      </p>
       <p v-if="combo.contractViolations.length > 0" class="combo-warning">
         Contract violations: {{ combo.contractViolations.join('; ') }}
       </p>
@@ -77,15 +69,16 @@ async function toggleTranscript() {
     ></iframe>
     <div v-else class="artifact-placeholder">No artifact for this run</div>
 
-    <section v-if="combo.files.transcript" class="transcript-section">
-      <button class="transcript-toggle" @click="toggleTranscript">
+    <div class="combo-actions">
+      <a class="card-link" :href="expandHash">⛶ Expand</a>
+      <button v-if="combo.files.transcript" class="card-link" @click="toggleTranscript">
         {{ transcript.status === 'collapsed' ? 'Transcript ▸' : 'Transcript ▾' }}
       </button>
-      <p v-if="transcript.status === 'loading'" class="transcript-note">Loading transcript…</p>
-      <p v-else-if="transcript.status === 'error'" class="transcript-note">
-        Failed to load transcript: {{ transcript.message }}
-      </p>
-      <TranscriptTimeline v-else-if="transcript.status === 'loaded'" :items="transcript.items" />
-    </section>
+    </div>
+    <p v-if="transcript.status === 'loading'" class="transcript-note">Loading transcript…</p>
+    <p v-else-if="transcript.status === 'error'" class="transcript-note">
+      Failed to load transcript: {{ transcript.message }}
+    </p>
+    <TranscriptTimeline v-else-if="transcript.status === 'loaded'" :items="transcript.items" />
   </article>
 </template>

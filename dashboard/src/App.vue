@@ -1,30 +1,32 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import {
-  buildSidebarTree,
-  filterCombos,
-  type Manifest,
-} from './lib/manifest'
-import SidebarNav from './components/SidebarNav.vue'
-import ComboCard from './components/ComboCard.vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import type { ComboEntry, Manifest } from './lib/manifest'
+import { parseHash, type Route } from './lib/router'
+import { theme, toggleTheme } from './lib/theme'
+import HomeView from './views/HomeView.vue'
+import QuestionView from './views/QuestionView.vue'
+import SessionView from './views/SessionView.vue'
 
 type ManifestState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'loaded'; manifest: Manifest }
 
-const state = ref<ManifestState>({ status: 'loading' })
-const query = ref('')
-const selectedQuestion = ref<string | null>(null)
+type View =
+  | { kind: 'home' }
+  | { kind: 'question'; question: string; combos: ComboEntry[] }
+  | { kind: 'session'; combo: ComboEntry | undefined }
 
-// Typing a keyword starts a new search across all questions (story 17), so a
-// question selection made before filtering must not keep scoping the main
-// area — otherwise filtering by a model name could show an empty grid.
-watch(query, () => {
-  selectedQuestion.value = null
-})
+const state = ref<ManifestState>({ status: 'loading' })
+const route = ref<Route>(parseHash(window.location.hash))
+
+function onHashChange() {
+  route.value = parseHash(window.location.hash)
+  window.scrollTo(0, 0)
+}
 
 onMounted(async () => {
+  window.addEventListener('hashchange', onHashChange)
   try {
     // Relative path so the app works when served from a sub-path.
     const response = await fetch('manifest.json')
@@ -39,42 +41,59 @@ onMounted(async () => {
   }
 })
 
-const visibleCombos = computed(() => {
-  if (state.value.status !== 'loaded') return []
-  const filtered = filterCombos(state.value.manifest.combos, query.value)
-  if (selectedQuestion.value === null) return filtered
-  return filtered.filter((combo) => combo.question.name === selectedQuestion.value)
-})
+onUnmounted(() => window.removeEventListener('hashchange', onHashChange))
 
-const sidebarTree = computed(() =>
-  state.value.status === 'loaded'
-    ? buildSidebarTree(filterCombos(state.value.manifest.combos, query.value))
-    : [],
+const combos = computed<ComboEntry[]>(() =>
+  state.value.status === 'loaded' ? state.value.manifest.combos : [],
 )
 
 const generatedAt = computed(() =>
-  state.value.status === 'loaded' ? state.value.manifest.generatedAt : null,
+  state.value.status === 'loaded' ? state.value.manifest.generatedAt.slice(0, 10) : null,
 )
+
+const view = computed<View>(() => {
+  const current = route.value
+  if (current.name === 'question') {
+    return {
+      kind: 'question',
+      question: current.question,
+      combos: combos.value.filter((combo) => combo.question.name === current.question),
+    }
+  }
+  if (current.name === 'session') {
+    return {
+      kind: 'session',
+      combo: combos.value.find((combo) => combo.comboId === current.comboId),
+    }
+  }
+  return { kind: 'home' }
+})
 </script>
 
 <template>
   <div class="app">
-    <SidebarNav
-      v-model:query="query"
-      :questions="sidebarTree"
-      :selected-question="selectedQuestion"
-      :generated-at="generatedAt"
-      @select="selectedQuestion = $event"
+    <!-- The session view is a fullscreen takeover with its own chrome. -->
+    <SessionView
+      v-if="view.kind === 'session'"
+      :key="view.combo?.comboId ?? 'unknown'"
+      :combo="view.combo"
     />
-    <main class="main">
+    <template v-else>
+      <header class="topbar">
+        <a class="topbar-brand" href="#/"><span class="brand-accent">LLM</span>-INTERVIEW</a>
+        <div class="topbar-right">
+          <span v-if="generatedAt" class="micro">Vol. 01 · Generated {{ generatedAt }}</span>
+          <button class="theme-toggle" @click="toggleTheme">
+            {{ theme === 'dark' ? 'Light' : 'Dark' }}
+          </button>
+        </div>
+      </header>
       <p v-if="state.status === 'loading'" class="state-note">Loading manifest…</p>
       <p v-else-if="state.status === 'error'" class="state-note">
         Failed to load manifest: {{ state.message }}
       </p>
-      <p v-else-if="visibleCombos.length === 0" class="state-note">No combos to show</p>
-      <div v-else class="combo-grid">
-        <ComboCard v-for="combo in visibleCombos" :key="combo.comboId" :combo="combo" />
-      </div>
-    </main>
+      <HomeView v-else-if="view.kind === 'home'" :combos="combos" />
+      <QuestionView v-else :question="view.question" :combos="view.combos" />
+    </template>
   </div>
 </template>

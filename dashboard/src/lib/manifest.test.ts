@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildSidebarTree,
   comboLabel,
   filterCombos,
   formatDuration,
+  formatParam,
+  summarizeManifest,
+  summarizeQuestions,
   type ComboEntry,
 } from './manifest'
 
@@ -41,19 +43,51 @@ const fixture: ComboEntry[] = [
   }),
 ]
 
-describe('buildSidebarTree', () => {
-  it('groups combos by question with models nested, sorted alphabetically', () => {
-    const tree = buildSidebarTree(fixture)
-    expect(tree.map((q) => q.name)).toEqual(['pomodoro', 'snake'])
-    const snake = tree[1]
-    expect(snake.models).toEqual([
-      { comboId: 'c2', name: 'qwen3.6-27b' },
-      { comboId: 'c3', name: 'zephyr-7b' },
-    ])
+describe('summarizeQuestions', () => {
+  it('groups combos by question with models, session count and latest run time', () => {
+    const summaries = summarizeQuestions(fixture)
+    expect(summaries.map((q) => q.name)).toEqual(['pomodoro', 'snake'])
+    expect(summaries[0]).toEqual({
+      name: 'pomodoro',
+      models: ['qwen3.6-27b'],
+      sessionCount: 1,
+      latestEndedAt: '2026-07-23T15:32:27.709Z',
+    })
+    const snake = summaries[1]
+    expect(snake.models).toEqual(['qwen3.6-27b', 'zephyr-7b'])
+    expect(snake.sessionCount).toBe(2)
   })
 
-  it('returns an empty tree for no combos', () => {
-    expect(buildSidebarTree([])).toEqual([])
+  it('picks the latest endedAt across a question’s combos', () => {
+    const summaries = summarizeQuestions([
+      makeCombo({ comboId: 'a', endedAt: '2026-07-20T00:00:00.000Z' }),
+      makeCombo({ comboId: 'b', endedAt: '2026-07-22T00:00:00.000Z' }),
+    ])
+    expect(summaries[0].latestEndedAt).toBe('2026-07-22T00:00:00.000Z')
+  })
+
+  it('returns an empty list for no combos', () => {
+    expect(summarizeQuestions([])).toEqual([])
+  })
+})
+
+describe('summarizeManifest', () => {
+  it('counts distinct questions and models, sessions and total duration', () => {
+    expect(summarizeManifest(fixture)).toEqual({
+      questionCount: 2,
+      modelCount: 2,
+      sessionCount: 3,
+      totalDurationMs: 292713 * 3,
+    })
+  })
+
+  it('returns zeros for no combos', () => {
+    expect(summarizeManifest([])).toEqual({
+      questionCount: 0,
+      modelCount: 0,
+      sessionCount: 0,
+      totalDurationMs: 0,
+    })
   })
 })
 
@@ -100,5 +134,13 @@ describe('formatDuration', () => {
 describe('comboLabel', () => {
   it('combines question and model name', () => {
     expect(comboLabel(fixture[0])).toBe('snake / zephyr-7b')
+  })
+})
+
+describe('formatParam', () => {
+  it('passes strings through and JSON-encodes other values', () => {
+    expect(formatParam('on')).toBe('on')
+    expect(formatParam(0.6)).toBe('0.6')
+    expect(formatParam(true)).toBe('true')
   })
 })
