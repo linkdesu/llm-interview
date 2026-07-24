@@ -44,7 +44,7 @@ export interface ManifestCombo {
   endedAt: string;
   /** Duration in milliseconds. */
   durationMs: number;
-  /** Run status: "ok", "timeout", or "error". */
+  /** Run status: "ok" or "error" ("timeout" may appear in older archives). */
   status: RunJson["status"];
   /** Artifact contract violation messages (empty if compliant). */
   contractViolations: string[];

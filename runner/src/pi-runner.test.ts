@@ -51,15 +51,6 @@ const STUB_PI_NORMAL = [
 ].join('\n');
 
 /**
- * A stub pi that sleeps forever — used to test timeout/killing.
- */
-const STUB_PI_HANG = `#!/bin/sh
-# Stub pi: hangs forever
-echo "pi: hanging..."
-sleep 999999
-`;
-
-/**
  * A stub pi that exits with a non-zero code.
  */
 const STUB_PI_FAIL = `#!/bin/sh
@@ -75,7 +66,6 @@ exit 42
 let testRoot: string;
 let stubBinDir: string;
 let stubNormal: string;
-let stubHang: string;
 let stubFail: string;
 
 beforeAll(async () => {
@@ -85,14 +75,12 @@ beforeAll(async () => {
   await mkdir(stubBinDir, { recursive: true });
 
   stubNormal = join(stubBinDir, "pi-normal");
-  stubHang = join(stubBinDir, "pi-hang");
   stubFail = join(stubBinDir, "pi-fail");
 
   await writeFile(stubNormal, STUB_PI_NORMAL);
-  await writeFile(stubHang, STUB_PI_HANG);
   await writeFile(stubFail, STUB_PI_FAIL);
 
-  await Bun.$`chmod +x ${stubNormal} ${stubHang} ${stubFail}`;
+  await Bun.$`chmod +x ${stubNormal} ${stubFail}`;
 });
 
 afterAll(async () => {
@@ -162,13 +150,11 @@ describe("runPi", () => {
       piBin: stubNormal,
       piHome,
       tempRoot,
-      timeoutMs: 10_000,
     });
 
     // Workdir is under tempRoot, not inside the repo
     expect(result.workdir).toContain(tempRoot);
     expect(result.exitCode).toBe(0);
-    expect(result.timedOut).toBe(false);
     expect(result.durationMs).toBeGreaterThan(0);
     expect(result.sessionFile).toBeTruthy();
     expect(result.sessionFile).toContain("session.jsonl");
@@ -209,7 +195,6 @@ describe("runPi", () => {
       piBin: stubNormal,
       piHome,
       tempRoot,
-      timeoutMs: 10_000,
     });
 
     // Verify spec.md was copied
@@ -244,7 +229,6 @@ describe("runPi", () => {
       piBin: stubNormal,
       piHome,
       tempRoot,
-      timeoutMs: 10_000,
     });
 
     const specExists = await access(join(result.workdir, "spec.md"))
@@ -256,35 +240,6 @@ describe("runPi", () => {
 
     expect(specExists).toBe(false);
     expect(ticketsExists).toBe(false);
-  });
-
-  it("kills the process and sets timedOut=true when timeoutMs is exceeded", async () => {
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("timeout");
-    await setupQuestionDir(dir, {});
-
-    const tempRoot = join(testRoot, "tmp-timeout");
-    await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
-
-    const start = Date.now();
-    const result = await runPi({
-      prompt: "Hang me",
-      question,
-      provider: "llamacpp-local",
-      modelId: "my-model",
-      piBin: stubHang,
-      piHome,
-      tempRoot,
-      timeoutMs: 500, // short timeout
-    });
-    const elapsed = Date.now() - start;
-
-    expect(result.timedOut).toBe(true);
-    expect(result.exitCode).toBeNull();
-    expect(elapsed).toBeLessThan(2000); // should not wait forever
-    expect(elapsed).toBeGreaterThanOrEqual(400); // should be close to timeout
   });
 
   it("captures non-zero exit code from pi", async () => {
@@ -305,11 +260,9 @@ describe("runPi", () => {
       piBin: stubFail,
       piHome,
       tempRoot,
-      timeoutMs: 10_000,
     });
 
     expect(result.exitCode).toBe(42);
-    expect(result.timedOut).toBe(false);
   });
 
   it("captures stdout/stderr to pi-output.log", async () => {
@@ -330,7 +283,6 @@ describe("runPi", () => {
       piBin: stubNormal,
       piHome,
       tempRoot,
-      timeoutMs: 10_000,
     });
 
     const logContent = await readFile(result.stdoutFile, "utf-8");
@@ -364,7 +316,6 @@ describe("runPi", () => {
       piBin: stubEmpty,
       piHome,
       tempRoot,
-      timeoutMs: 10_000,
     });
 
     expect(result.sessionFile).toBeNull();
@@ -388,7 +339,6 @@ describe("runPi", () => {
       piBin: stubNormal,
       piHome,
       tempRoot,
-      timeoutMs: 10_000,
     });
 
     // The stub normal script should have created the session file using the args

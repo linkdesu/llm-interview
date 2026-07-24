@@ -196,7 +196,7 @@ function renderJsonEvent(line: string): void {
 
 /**
  * Shared pi execution environment: which binary, which config home,
- * where isolated workdirs live, and the wall-clock budget per run.
+ * where isolated workdirs live, and the turn budget per run.
  */
 export interface PiEnvironment {
   /** Absolute path to the pi executable (injectable for tests). */
@@ -205,8 +205,6 @@ export interface PiEnvironment {
   piHome: string;
   /** Directory under which the isolated working directory is created. */
   tempRoot: string;
-  /** Wall-clock timeout in milliseconds; the process is killed if exceeded. */
-  timeoutMs: number;
   /** Maximum assistant turns before the process is killed. */
   maxTurns: number;
 }
@@ -231,10 +229,8 @@ export interface PiRunOptions extends PiEnvironment {
 export interface PiRunResult {
   /** Absolute path to the isolated working directory. */
   workdir: string;
-  /** Exit code of the pi process, or null if killed by timeout. */
+  /** Exit code of the pi process, or null if killed (e.g. max turns exceeded). */
   exitCode: number | null;
-  /** True if the process was killed due to timeout. */
-  timedOut: boolean;
   /** True if the process was killed because it exceeded the max turn limit. */
   maxTurnsExceeded: boolean;
   /** Duration of the run in milliseconds. */
@@ -255,7 +251,7 @@ export interface PiRunResult {
  * - Copies spec.md / tickets.md from the question directory if present.
  * - Spawns piBin with the given prompt and model arguments.
  * - Captures stdout+stderr to pi-output.log in the workdir.
- * - Kills the process if it exceeds timeoutMs.
+ * - Kills the process if it exceeds maxTurns.
  * - Renames the session JSONL file to session.jsonl.
  */
 export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
@@ -275,7 +271,6 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     piBin,
     piHome,
     tempRoot,
-    timeoutMs,
   } = options;
 
   // Create an isolated working directory under tempRoot
@@ -392,26 +387,17 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     }
   });
 
-  // Set up timeout to kill the process
-  let timedOut = false;
+  // Wait for the process to exit (the only kill switch is the max turn
+  // limit enforced while parsing stdout events above)
   let exitCode: number | null = null;
-  const timeoutId = setTimeout(() => {
-    timedOut = true;
-    log(`timeout reached (${timeoutMs}ms), killing with SIGKILL`);
-    child.kill("SIGKILL");
-  }, timeoutMs);
-
   const startTime = Date.now();
 
-  // Wait for the process to exit
   await new Promise<void>((resolve, reject) => {
     child.on("exit", (code) => {
       exitCode = code;
-      clearTimeout(timeoutId);
       resolve();
     });
     child.on("error", (err) => {
-      clearTimeout(timeoutId);
       reject(err);
     });
   });
@@ -420,9 +406,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   if (aiStarted) {
     process.stdout.write(`\n${dim("\u2501".repeat(50))}\n\n`);
   }
-  if (timedOut) {
-    log(`timed out after ${elapsed}s`);
-  } else if (killedForMaxTurns) {
+  if (killedForMaxTurns) {
     log(`killed after ${elapsed}s: max turns (${maxTurns}) exceeded`);
   } else {
     log(`exited with code ${exitCode} (${elapsed}s)`);
@@ -470,8 +454,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
 
   return {
     workdir,
-    exitCode: timedOut ? null : exitCode,
-    timedOut,
+    exitCode,
     maxTurnsExceeded: killedForMaxTurns,
     durationMs,
     sessionFile,

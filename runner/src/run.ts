@@ -63,9 +63,12 @@ export interface RunComboOutcome {
   endedAt: string;
   /** Duration in milliseconds. */
   durationMs: number;
-  /** Run status: "ok", "timeout", or "error". */
-  status: "ok" | "timeout" | "error";
-  /** Exit code from pi, or null if killed by timeout. */
+  /**
+   * Run status: "ok" or "error". A run killed for exceeding the max turn
+   * limit is reported as "error" with maxTurnsExceeded set to true.
+   */
+  status: "ok" | "error";
+  /** Exit code from pi, or null if killed (e.g. max turns exceeded). */
   exitCode: number | null;
   /**
    * True if the run was killed for exceeding the max turn limit —
@@ -102,9 +105,12 @@ export interface RunJson {
   endedAt: string;
   /** Duration in milliseconds. */
   durationMs: number;
-  /** Run status: "ok", "timeout", or "error". */
-  status: "ok" | "timeout" | "error";
-  /** Exit code from pi, or null if killed by timeout. */
+  /**
+   * Run status: "ok" or "error". A run killed for exceeding the max turn
+   * limit is reported as "error" with maxTurnsExceeded set to true.
+   */
+  status: "ok" | "error";
+  /** Exit code from pi, or null if killed (e.g. max turns exceeded). */
   exitCode: number | null;
   /**
    * True if the run was killed for exceeding the max turn limit —
@@ -285,7 +291,6 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     piBin,
     piHome,
     tempRoot,
-    timeoutMs,
     questionFilter,
     modelFilter,
     piVersion,
@@ -340,7 +345,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       progress(`\n=== Combo ${comboIndex}/${total} ===`);
       progress(`Starting: ${label}`);
 
-      let status: "ok" | "timeout" | "error" = "ok";
+      let status: "ok" | "error" = "ok";
       let exitCode: number | null;
       let durationMs: number;
       let maxTurnsExceeded = false;
@@ -362,7 +367,6 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           piBin,
           piHome,
           tempRoot,
-          timeoutMs,
           maxTurns: effectiveMaxTurns,
         });
 
@@ -370,9 +374,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         exitCode = result.exitCode;
         maxTurnsExceeded = result.maxTurnsExceeded;
 
-        if (result.timedOut) {
-          status = "timeout";
-        } else if (result.exitCode !== 0) {
+        if (result.exitCode !== 0) {
           status = "error";
         }
 
@@ -482,7 +484,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
       completed.add(comboId);
       const durSec = ((Date.now() - Date.parse(startedAt)) / 1000).toFixed(1);
-      const statusIcon = status === "ok" ? "\u2705" : status === "timeout" ? "\u23f0" : "\u274c";
+      const statusIcon = status === "ok" ? "\u2705" : "\u274c";
       progress(`=== Combo ${comboIndex}/${total} Done: ${statusIcon} ${status.toUpperCase()} (${durSec}s) ===`);
 
       // Print progress overview
@@ -491,7 +493,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         if (completed.has(plan.comboId)) {
           const o = outcomes.find((r) => r.comboId === plan.comboId)!;
           const d = (o.durationMs / 1000).toFixed(1);
-          const ic = o.status === "ok" ? "\u2705" : o.status === "timeout" ? "\u23f0" : "\u274c";
+          const ic = o.status === "ok" ? "\u2705" : "\u274c";
           lines.push(`  ${ic} ${plan.question.name} \u00d7 ${plan.model.name}  ${o.status.toUpperCase()}  ${d}s`);
         } else {
           lines.push(`  \u23f3 ${plan.question.name} \u00d7 ${plan.model.name}  pending`);
@@ -539,7 +541,6 @@ if (import.meta.main) {
   // Parse CLI arguments
   let questionFilter: string[] | undefined;
   let modelFilter: string[] | undefined;
-  let timeoutMs = 600000; // 10 minutes default
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -548,9 +549,6 @@ if (import.meta.main) {
         break;
       case "--model":
         modelFilter = parseFilter(args[++i]);
-        break;
-      case "--timeout-ms":
-        timeoutMs = parseInt(args[++i] || "600000", 10);
         break;
     }
   }
@@ -571,7 +569,6 @@ if (import.meta.main) {
     piBin,
     piHome: join(repoRoot, ".pi-home"),
     tempRoot: join(tmpdir(), "llm-interview-runs"),
-    timeoutMs,
     questionFilter,
     modelFilter,
     maxTurns: config.maxTurns,
