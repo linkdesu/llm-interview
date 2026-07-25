@@ -24,6 +24,11 @@ let turnCount = 0;
 let maxTurnsExceeded = false;
 let killedForMaxTurns = false;
 let maxTurns = 100;
+/**
+ * Terminal API failure observed in the event stream (final auto-retry
+ * failure). Null when the invocation had no fatal API error.
+ */
+let apiFailure: string | null = null;
 
 const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
 const yellow = (s: string) => `\x1b[33m${s}\x1b[39m`;
@@ -189,6 +194,9 @@ function renderJsonEvent(line: string): void {
     if (event.success === true) {
       process.stdout.write(`${dim("  ✓ retry succeeded")}\n`);
     } else {
+      // Final retry failure: pi gives up on the request but still exits 0,
+      // so this is the runner's only reliable terminal-failure signal.
+      apiFailure = String(event.finalError ?? "unknown API error");
       process.stdout.write(`${yellow("  ⚠ retry failed:")} ${String(event.finalError ?? "")}\n`);
     }
     return;
@@ -315,6 +323,12 @@ export interface InvocationResult {
   sessionFile: string | null;
   /** Absolute path to the captured stdout+stderr log inside the workdir. */
   stdoutFile: string;
+  /**
+   * Terminal API failure (e.g. connection loss after all retries), or null.
+   * pi exits 0 even when every request failed, so the runner must rely on
+   * this signal — never on the exit code — to detect infrastructure failure.
+   */
+  apiError: string | null;
 }
 
 /**
@@ -333,6 +347,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   maxTurnsExceeded = false;
   killedForMaxTurns = false;
   maxTurns = options.maxTurns;
+  apiFailure = null;
 
   const {
     prompt,
@@ -494,6 +509,14 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
 
   const durationMs = Date.now() - startTime;
 
+  // Backstop: if the event stream showed no terminal retry failure but the
+  // transcript's last assistant message ended with stopReason "error", the
+  // invocation still died from an API failure (e.g. auto-retry disabled).
+  let apiError: string | null = apiFailure;
+  if (!apiError && sessionFile && (await sessionEndedWithApiError(sessionFile))) {
+    apiError = 'transcript ends with stopReason "error"';
+  }
+
   return {
     sessionId,
     exitCode,
@@ -501,6 +524,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     durationMs,
     sessionFile,
     stdoutFile,
+    apiError,
   };
 }
 
@@ -562,6 +586,36 @@ export async function sessionHasWriteToolErrors(sessionFile: string): Promise<bo
         }
       }
     }
+  }
+  return false;
+}
+
+/**
+ * Check whether a session transcript's LAST assistant message ended with
+ * stopReason "error" — the signature of a terminal API failure (pi persists
+ * one such message per failed request, including the final one). Only the
+ * last message matters: earlier error messages may belong to retry attempts
+ * that eventually succeeded.
+ */
+export async function sessionEndedWithApiError(sessionFile: string): Promise<boolean> {
+  let content: string;
+  try {
+    content = await readFile(sessionFile, "utf-8");
+  } catch {
+    return false;
+  }
+
+  const lines = content.split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+    const msg = obj.message as Record<string, unknown> | undefined;
+    if (obj.type !== "message" || msg?.role !== "assistant") continue;
+    return msg.stopReason === "error";
   }
   return false;
 }

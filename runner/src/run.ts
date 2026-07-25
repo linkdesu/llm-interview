@@ -107,12 +107,17 @@ export interface InvocationRecord {
    * in the transcript.
    */
   dirty: boolean;
-  /** Invocation status: "ok" or "error" (exit code / max-turns based). */
+  /** Invocation status: "ok" or "error" (exit code / max-turns / API failure). */
   status: "ok" | "error";
   /** Exit code from pi, or null if killed (e.g. max turns exceeded). */
   exitCode: number | null;
   /** True if this invocation was killed for exceeding the max turn limit. */
   maxTurnsExceeded: boolean;
+  /**
+   * Terminal API failure (e.g. connection loss after all retries), or
+   * undefined. Always aborts the whole matrix — see RunJson.apiError.
+   */
+  apiError?: string;
   /** Duration of the invocation in milliseconds. */
   durationMs: number;
 }
@@ -169,6 +174,13 @@ export interface RunJson {
    * single-invocation flow). Includes evaluation invocations.
    */
   invocations?: InvocationRecord[];
+  /**
+   * Terminal API failure that aborted the whole matrix (e.g. network
+   * outage). Infrastructure failures are not model failures: every
+   * subsequent invocation would fail the same way, so the runner stops
+   * immediately and waits for manual recovery instead of burning combos.
+   */
+  apiError?: string;
 }
 
 /**
@@ -332,7 +344,7 @@ function applyNameFilter<T>(
   const unknown = filter.filter((n) => !keys.has(n));
   if (unknown.length > 0) {
     throw new Error(
-      `Unknown ${kind} filter name(s): ${unknown.join(", ")}.`
+      `Unknown ${kind} filter name(s): ${unknown.join(", ")}. Available: ${[...keys].join(", ")}`
     );
   }
   return items.filter((i) => filter.includes(keyFn(i)));
@@ -413,6 +425,9 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       let exitCode: number | null = null;
       let durationMs: number;
       let maxTurnsExceeded = false;
+      // Terminal API failure that aborts the whole matrix (recorded in
+      // run.json); undefined while the combo is healthy.
+      let apiError: string | undefined;
       // A model may override the global max turn limit when it needs
       // more attempts to finish a task.
       const effectiveMaxTurns = model.maxTurns ?? maxTurns;
@@ -470,11 +485,22 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
             ticket: step.ticket?.index,
             ticketTitle: step.ticket?.title,
             dirty,
-            status: res.exitCode === 0 && !res.maxTurnsExceeded ? "ok" : "error",
+            status: res.exitCode === 0 && !res.maxTurnsExceeded && !res.apiError ? "ok" : "error",
             exitCode: res.exitCode,
             maxTurnsExceeded: res.maxTurnsExceeded,
+            apiError: res.apiError ?? undefined,
             durationMs: res.durationMs,
           });
+
+          // Infrastructure failure (network outage etc.): every subsequent
+          // invocation would fail the same way, so skip evaluation, fail the
+          // combo, and abort the whole matrix for manual recovery.
+          if (res.apiError) {
+            progress(`  ✗ ${step.sessionId}: terminal API failure (${res.apiError})`);
+            status = "error";
+            apiError = res.apiError;
+            break;
+          }
 
           if (!perTicket) {
             if (res.exitCode !== 0) status = "error";
@@ -521,11 +547,22 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
               evaluation: true,
               verdict,
               dirty: evalDirty,
-              status: evalRes.exitCode === 0 && !evalRes.maxTurnsExceeded ? "ok" : "error",
+              status: evalRes.exitCode === 0 && !evalRes.maxTurnsExceeded && !evalRes.apiError ? "ok" : "error",
               exitCode: evalRes.exitCode,
               maxTurnsExceeded: evalRes.maxTurnsExceeded,
+              apiError: evalRes.apiError ?? undefined,
               durationMs: evalRes.durationMs,
             });
+
+            // Same infrastructure-failure rule as ticket invocations: an
+            // evaluation that died from an API failure says nothing about
+            // ticket completeness — abort the matrix, not just the run.
+            if (evalRes.apiError) {
+              progress(`  ✗ ${step.sessionId}-eval: terminal API failure (${evalRes.apiError})`);
+              status = "error";
+              apiError = evalRes.apiError;
+              break;
+            }
 
             if (verdict !== "complete") {
               progress(`  ✗ ticket ${step.ticket.index} judged incomplete — aborting run`);
@@ -596,6 +633,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           maxTurns: effectiveMaxTurns,
           contractViolations,
           invocations: perTicket ? invocations : undefined,
+          apiError,
         };
 
         await writeFile(
@@ -664,6 +702,17 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         }
       }
       progress(lines.join("\n"));
+
+      // A terminal API failure is infrastructure, not model behavior: stop
+      // the whole matrix and wait for manual recovery instead of burning
+      // the remaining combos on guaranteed failures.
+      if (apiError) {
+        progress(
+          `\n⚠ Matrix aborted: terminal API failure (${apiError}).\n` +
+          `Restore connectivity, then re-run the remaining combos.`
+        );
+        return outcomes;
+      }
     }
   }
 

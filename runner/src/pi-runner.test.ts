@@ -476,3 +476,158 @@ describe("parseVerdict", () => {
     expect(await parseVerdict(f)).toBeNull();
   });
 });
+
+describe("sessionEndedWithApiError", () => {
+  const assistantLine = (stopReason: string) =>
+    JSON.stringify({
+      type: "message",
+      message: { role: "assistant", content: [], stopReason },
+    });
+
+  it("returns true when the last assistant message has stopReason error", async () => {
+    const { sessionEndedWithApiError } = await import("./pi-runner");
+    const f = join(testRoot, "api-error-last.jsonl");
+    await writeFile(f, assistantLine("stop") + "\n" + assistantLine("error") + "\n");
+    expect(await sessionEndedWithApiError(f)).toBe(true);
+  });
+
+  it("returns false when an earlier attempt errored but the last message is fine", async () => {
+    const { sessionEndedWithApiError } = await import("./pi-runner");
+    const f = join(testRoot, "api-error-recovered.jsonl");
+    await writeFile(f, assistantLine("error") + "\n" + assistantLine("stop") + "\n");
+    expect(await sessionEndedWithApiError(f)).toBe(false);
+  });
+
+  it("returns false for a missing file", async () => {
+    const { sessionEndedWithApiError } = await import("./pi-runner");
+    expect(await sessionEndedWithApiError(join(testRoot, "nope.jsonl"))).toBe(false);
+  });
+});
+
+describe("runInvocation API failure detection", () => {
+  /**
+   * Stub pi emitting a terminal auto-retry failure on stdout (what a real
+   * network outage looks like), writing a session file, and exiting 0 —
+   * exactly how pi behaves when the API is unreachable.
+   */
+  const STUB_PI_RETRY_FAIL = [
+    "#!/bin/sh",
+    'echo "{\\"type\\":\\"auto_retry_start\\",\\"attempt\\":1,\\"maxAttempts\\":3,\\"delayMs\\":2000,\\"errorMessage\\":\\"Connection error.\\"}"',
+    'echo "{\\"type\\":\\"auto_retry_end\\",\\"success\\":false,\\"attempt\\":3,\\"finalError\\":\\"Connection error.\\"}"',
+    'SESSION_DIR=""',
+    'SESSION_ID=""',
+    'while [ $# -gt 0 ]; do',
+    '  case "$1" in',
+    '    --session-dir) SESSION_DIR="$2"; shift 2 ;;',
+    '    --session-id) SESSION_ID="$2"; shift 2 ;;',
+    '    *) shift ;;',
+    "  esac",
+    "done",
+    'if [ -n "$SESSION_DIR" ] && [ -n "$SESSION_ID" ]; then',
+    "  echo '{\"type\":\"message\",\"message\":{\"role\":\"assistant\",\"content\":[],\"stopReason\":\"error\"}}' > \"${SESSION_DIR}/${SESSION_ID}_session.jsonl\"",
+    "fi",
+    "exit 0",
+  ].join("\n");
+
+  it("captures a terminal auto-retry failure as apiError despite exit code 0", async () => {
+    const stubRetryFail = join(stubBinDir, "pi-retry-fail");
+    await writeFile(stubRetryFail, STUB_PI_RETRY_FAIL);
+    await Bun.$`chmod +x ${stubRetryFail}`;
+
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-retry-fail");
+    await setupQuestionDir(dir, {});
+
+    const tempRoot = join(testRoot, "tmp-inv-retry-fail");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const result = await runInvocation({
+      prompt: "Hello agent",
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stubRetryFail,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.apiError).toBe("Connection error.");
+  });
+
+  it("flags apiError via the transcript backstop when no retry events appear", async () => {
+    // Stub pi: no auto-retry events (e.g. auto-retry disabled), but the
+    // transcript's last assistant message has stopReason "error".
+    const stubSilentFail = join(stubBinDir, "pi-silent-fail");
+    await writeFile(
+      stubSilentFail,
+      [
+        "#!/bin/sh",
+        'SESSION_DIR=""',
+        'SESSION_ID=""',
+        'while [ $# -gt 0 ]; do',
+        '  case "$1" in',
+        '    --session-dir) SESSION_DIR="$2"; shift 2 ;;',
+        '    --session-id) SESSION_ID="$2"; shift 2 ;;',
+        '    *) shift ;;',
+        "  esac",
+        "done",
+        'if [ -n "$SESSION_DIR" ] && [ -n "$SESSION_ID" ]; then',
+        "  echo '{\"type\":\"message\",\"message\":{\"role\":\"assistant\",\"content\":[],\"stopReason\":\"error\"}}' > \"${SESSION_DIR}/${SESSION_ID}_session.jsonl\"",
+        "fi",
+        "exit 0",
+      ].join("\n")
+    );
+    await Bun.$`chmod +x ${stubSilentFail}`;
+
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-silent-fail");
+    await setupQuestionDir(dir, {});
+
+    const tempRoot = join(testRoot, "tmp-inv-silent-fail");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const result = await runInvocation({
+      prompt: "Hello agent",
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stubSilentFail,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.apiError).toBeTruthy();
+  });
+
+  it("reports no apiError for a healthy invocation", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-healthy");
+    await setupQuestionDir(dir, {});
+
+    const tempRoot = join(testRoot, "tmp-inv-healthy");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const result = await runInvocation({
+      prompt: "Hello agent",
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stubNormal,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+    });
+
+    expect(result.apiError).toBeNull();
+  });
+});

@@ -515,7 +515,7 @@ describe("runMatrix", () => {
         questionFilter: ["nonexistent-question"],
         piVersion: "test-1.0",
       })
-    ).rejects.toThrow();
+    ).rejects.toThrow(/nonexistent-question.*Available:.*q-hello/s);
   });
 
   it("throws error for unknown model filter name", async () => {
@@ -1195,5 +1195,147 @@ describe("runMatrix per-ticket flow", () => {
     const runJson = await readArchivedRunJson(sessionRoot);
     // Single-invocation flow: no invocations array, no evaluation
     expect(runJson.invocations).toBeUndefined();
+  });
+});
+
+describe("runMatrix API failure handling", () => {
+  let tempRoot: string;
+  let piHome: string;
+  let runTempRoot: string;
+
+  beforeEach(async () => {
+    tempRoot = makeTempRoot();
+    await mkdir(tempRoot, { recursive: true });
+    piHome = join(tempRoot, ".pi-home");
+    runTempRoot = join(tempRoot, "runs");
+    await mkdir(runTempRoot, { recursive: true });
+  });
+
+  afterAll(async () => {
+    try {
+      await rm(tempRoot, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  const API_ERROR_SESSION =
+    '{"type":"message","message":{"role":"assistant","content":[],"stopReason":"error"}}';
+
+  it("aborts the whole matrix on a terminal API failure (no evaluation, no later combos)", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-api-abort");
+    await mkdir(repoDir, { recursive: true });
+
+    // Two models × one ticketed question: model-alpha runs first and dies
+    // from an API failure; model-beta must never run.
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        { name: "model-alpha", provider: "llamacpp-local", modelId: "alpha.gguf", params: { temp: 0.7 } },
+        { name: "model-beta", provider: "llamacpp-local", modelId: "beta.gguf", params: { temp: 0.7 } },
+      ],
+      [{ name: "q-ticketed", intent: "Build a multi-ticket project.", hasTickets: true }]
+    );
+    const sessionRoot = join(repoDir, "session");
+    const qDir = join(repoDir, "questions", "q-ticketed");
+    await writeFile(
+      join(qDir, "tickets.md"),
+      "# Tickets\n\n[ ]1. Ticket number 1\n  - subtask\n[ ]2. Ticket number 2\n  - subtask\n",
+      "utf-8"
+    );
+
+    // First (and only) invocation: transcript ends with stopReason "error",
+    // the signature of a terminal API failure.
+    const stub = join(tempRoot, "stub-api-error");
+    await createScriptedStubPi(stub, { 1: API_ERROR_SESSION });
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    // The matrix stopped after the failed combo: model-beta never ran.
+    expect(results).toHaveLength(1);
+    expect(results[0].model.name).toBe("model-alpha");
+    expect(results[0].status).toBe("error");
+
+    // run.json records the API failure; no evaluation was attempted.
+    const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));
+    expect(dirs).toHaveLength(1);
+    const runJson = JSON.parse(
+      await readFile(join(sessionRoot, "q-ticketed", "model-alpha", dirs[0], "run.json"), "utf-8")
+    ) as RunJson;
+    expect(runJson.status).toBe("error");
+    expect(runJson.apiError).toBeTruthy();
+    expect(runJson.invocations!).toHaveLength(1);
+    expect(runJson.invocations![0]).toMatchObject({
+      ticket: 1,
+      status: "error",
+    });
+    expect(runJson.invocations![0].apiError).toBeTruthy();
+
+    // model-beta has no archive at all.
+    const betaDirs = await listDir(join(sessionRoot, "q-ticketed", "model-beta"));
+    expect(betaDirs).toHaveLength(0);
+  });
+
+  it("does not abort the matrix when a retry eventually succeeds", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-api-recovered");
+    await mkdir(repoDir, { recursive: true });
+
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        { name: "model-alpha", provider: "llamacpp-local", modelId: "alpha.gguf", params: { temp: 0.7 } },
+        { name: "model-beta", provider: "llamacpp-local", modelId: "beta.gguf", params: { temp: 0.7 } },
+      ],
+      [{ name: "q-ticketed", intent: "Build a multi-ticket project.", hasTickets: true }]
+    );
+    const sessionRoot = join(repoDir, "session");
+    const qDir = join(repoDir, "questions", "q-ticketed");
+    await writeFile(
+      join(qDir, "tickets.md"),
+      "# Tickets\n\n[ ]1. Ticket number 1\n  - subtask\n[ ]2. Ticket number 2\n  - subtask\n",
+      "utf-8"
+    );
+
+    // An earlier retry attempt errored, but the last assistant message is
+    // clean — the invocation recovered and the matrix must continue.
+    const recoveredSession =
+      '{"type":"message","message":{"role":"assistant","content":[],"stopReason":"error"}}' +
+      "\n" +
+      CLEAN_SESSION;
+    const stub = join(tempRoot, "stub-api-recovered");
+    await createScriptedStubPi(stub, {
+      1: recoveredSession,
+      2: CLEAN_SESSION,
+      3: recoveredSession,
+      4: CLEAN_SESSION,
+    });
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].status).toBe("ok");
+    expect(results[1].status).toBe("ok");
   });
 });
