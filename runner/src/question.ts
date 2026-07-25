@@ -2,6 +2,16 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 /**
+ * A single ticket parsed from tickets.md: a top-level ordered-list item.
+ */
+export interface Ticket {
+  /** 1-based position in document order (independent of the literal number). */
+  index: number;
+  /** The ordered-list item's text (without the number/checkbox marker). */
+  title: string;
+}
+
+/**
  * A coding agent question loaded from the question/ directory.
  * Each question is a subdirectory containing intent.md (required) and optionally spec.md / tickets.md.
  */
@@ -16,6 +26,28 @@ export interface Question {
   hasSpec: boolean;
   /** Whether tickets.md is present in the directory. */
   hasTickets: boolean;
+  /**
+   * Tickets parsed from tickets.md in document order (empty when absent or
+   * nothing parseable). Parsing is deliberately lenient — following the
+   * format convention is part of what the Question tests.
+   */
+  tickets: Ticket[];
+}
+
+/**
+ * Parse tickets.md content into tickets: top-level ordered-list items,
+ * with an optional `[ ]` / `[x]` checkbox prefix. Nested (indented) lines
+ * and non-list content are ignored. Indices are assigned in document order.
+ */
+export function parseTickets(content: string): Ticket[] {
+  const tickets: Ticket[] = [];
+  for (const line of content.split("\n")) {
+    const m = line.match(/^ {0,3}(?:\[[ xX]\])?\s*\d+\.\s+(.+?)\s*$/);
+    if (m) {
+      tickets.push({ index: tickets.length + 1, title: m[1] });
+    }
+  }
+  return tickets;
 }
 
 /**
@@ -77,12 +109,21 @@ export async function loadQuestions(questionDir: string): Promise<Question[]> {
     const hasSpec = await fileExists(join(questionPath, "spec.md"));
     const hasTickets = await fileExists(join(questionPath, "tickets.md"));
 
+    // Parse tickets.md into tickets when present (lenient; empty when
+    // nothing parseable — the runner falls back to the single-invocation flow)
+    let tickets: Ticket[] = [];
+    if (hasTickets) {
+      const ticketsContent = await readFile(join(questionPath, "tickets.md"), "utf-8");
+      tickets = parseTickets(ticketsContent);
+    }
+
     questions.push({
       name: entry.name,
       dir: questionPath,
       intent: intentContent,
       hasSpec,
       hasTickets,
+      tickets,
     });
   }
 

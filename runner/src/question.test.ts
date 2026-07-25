@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { loadQuestions, type Question } from "./question";
+import { loadQuestions, parseTickets, type Question } from "./question";
 
 describe("loadQuestions", () => {
   let tempDir: string;
@@ -191,6 +191,41 @@ Some description with multiple paragraphs.
     });
   });
 
+  describe("ticket parsing", () => {
+    it("parses tickets.md into tickets in document order", async () => {
+      createQuestion("with-tickets", {
+        "intent.md": "Do things",
+        "tickets.md": "# Tickets\n\n[ ]1. First ticket\n  - subtask a\n[ ]2. Second ticket: with description\n",
+      });
+
+      const result = await loadQuestions(tempDir);
+      expect(result[0].tickets).toEqual([
+        { index: 1, title: "First ticket" },
+        { index: 2, title: "Second ticket: with description" },
+      ]);
+      cleanup();
+    });
+
+    it("returns an empty tickets array when tickets.md is absent", async () => {
+      createQuestion("no-tickets", { "intent.md": "Do things" });
+
+      const result = await loadQuestions(tempDir);
+      expect(result[0].tickets).toEqual([]);
+      cleanup();
+    });
+
+    it("returns an empty tickets array when nothing is parseable", async () => {
+      createQuestion("unparseable-tickets", {
+        "intent.md": "Do things",
+        "tickets.md": "# Tickets\n\n## Old-style header\n- bullet\n",
+      });
+
+      const result = await loadQuestions(tempDir);
+      expect(result[0].tickets).toEqual([]);
+      cleanup();
+    });
+  });
+
   describe("type shape", () => {
     it("returns objects matching Question interface", async () => {
       createQuestion("typed-check", {
@@ -207,10 +242,55 @@ Some description with multiple paragraphs.
       expect(typeof q.intent).toBe("string");
       expect(typeof q.hasSpec).toBe("boolean");
       expect(typeof q.hasTickets).toBe("boolean");
+      expect(Array.isArray(q.tickets)).toBe(true);
       expect(q.dir).not.toBe("");
       expect(q.dir.endsWith(q.name)).toBe(true);
       cleanup();
     });
   });
 
+});
+
+describe("parseTickets", () => {
+  it("parses checkbox-prefixed ordered list items", () => {
+    const tickets = parseTickets(
+      "# Snake — Tickets\n\n[ ]1. Minimal playable snake\n  - subtask\n[ ]2. Start menu\n[x]3. Done already\n"
+    );
+    expect(tickets).toEqual([
+      { index: 1, title: "Minimal playable snake" },
+      { index: 2, title: "Start menu" },
+      { index: 3, title: "Done already" },
+    ]);
+  });
+
+  it("parses bare ordered list items without checkboxes", () => {
+    const tickets = parseTickets("1. First\n2. Second\n");
+    expect(tickets).toEqual([
+      { index: 1, title: "First" },
+      { index: 2, title: "Second" },
+    ]);
+  });
+
+  it("ignores nested list items, headers, and prose", () => {
+    const tickets = parseTickets(
+      "# Tickets\nSome preamble.\n\n[ ]1. Real ticket\n  - 2. not a ticket (nested)\n## 3. not a ticket (header)\n\n[ ]2. Another real one\n"
+    );
+    expect(tickets).toEqual([
+      { index: 1, title: "Real ticket" },
+      { index: 2, title: "Another real one" },
+    ]);
+  });
+
+  it("renumbers by document order, ignoring literal numbers", () => {
+    const tickets = parseTickets("[ ]5. Fifth\n[ ]9. Ninth\n");
+    expect(tickets).toEqual([
+      { index: 1, title: "Fifth" },
+      { index: 2, title: "Ninth" },
+    ]);
+  });
+
+  it("returns an empty array for content without ordered items", () => {
+    expect(parseTickets("# Only headers\n- bullets\n")).toEqual([]);
+    expect(parseTickets("")).toEqual([]);
+  });
 });

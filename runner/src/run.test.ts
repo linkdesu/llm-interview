@@ -812,3 +812,388 @@ sleep 30
     expect(runJson.maxTurns).toBe(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-ticket flow (ADR 0007): one pi invocation per ticket, dirty
+// invocations arbitrated by an evaluation invocation.
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a repo fixture with one model and one question whose tickets.md
+ * parses into the given number of tickets.
+ */
+async function writeTicketedFixtures(
+  repoDir: string,
+  ticketCount: number
+): Promise<{ configPath: string; questionDir: string; sessionRoot: string }> {
+  const configPath = join(repoDir, "config.toml");
+  await writeFile(
+    configPath,
+    `max_turns = 100\nrun_rules = ""\n\n[[models]]\nname = "model-alpha"\nprovider = "llamacpp-local"\nmodelId = "alpha.gguf"\n[models.params]\ntemp = 0.7\n`,
+    "utf-8"
+  );
+
+  const questionDir = join(repoDir, "questions");
+  const qDir = join(questionDir, "q-ticketed");
+  await mkdir(qDir, { recursive: true });
+  await writeFile(join(qDir, "intent.md"), "Build a multi-ticket project.", "utf-8");
+  const ticketLines = Array.from(
+    { length: ticketCount },
+    (_, i) => `[ ]${i + 1}. Ticket number ${i + 1}\n  - subtask`
+  ).join("\n");
+  await writeFile(join(qDir, "tickets.md"), `# Tickets\n\n${ticketLines}\n`, "utf-8");
+
+  return { configPath, questionDir, sessionRoot: join(repoDir, "session") };
+}
+
+/**
+ * A stub pi that distinguishes invocations via a counter file in cwd and
+ * emits a session.jsonl per invocation according to the given script map
+ * (1-based invocation number → session.jsonl content). Always writes the
+ * three artifact files and exits 0. Cleans up its counter on the last call.
+ */
+async function createScriptedStubPi(
+  stubPath: string,
+  sessionByCall: Record<number, string>
+) {
+  const lastCall = Math.max(...Object.keys(sessionByCall).map(Number));
+  const cases = Object.entries(sessionByCall)
+    .map(([n, content]) => `  ${n}) SESSION='${content}' ;;`)
+    .join("\n");
+  const script = `#!/usr/bin/env bash
+COUNT=$(cat .stub-count 2>/dev/null || echo 0)
+COUNT=$((COUNT+1))
+echo "$COUNT" > .stub-count
+SESSION='{}'
+case "$COUNT" in
+${cases}
+esac
+echo "$SESSION" > session.jsonl
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+if [ "$COUNT" -ge ${lastCall} ]; then rm -f .stub-count; fi
+exit 0
+`;
+  await writeFile(stubPath, script, "utf-8");
+  await chmod(stubPath, 0o755);
+}
+
+const CLEAN_SESSION =
+  '{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}';
+const DIRTY_SESSION =
+  '{"type":"message","message":{"role":"assistant","content":[{"type":"toolResult","isError":true}]}}';
+const VERDICT_SESSION = (v: string) =>
+  `{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"Judged. <verdict>${v}</verdict>"}]}}`;
+
+describe("runMatrix per-ticket flow", () => {
+  let tempRoot: string;
+  let piHome: string;
+  let runTempRoot: string;
+
+  beforeEach(async () => {
+    tempRoot = makeTempRoot();
+    await mkdir(tempRoot, { recursive: true });
+    piHome = join(tempRoot, ".pi-home");
+    runTempRoot = join(tempRoot, "runs");
+    await mkdir(runTempRoot, { recursive: true });
+  });
+
+  afterAll(async () => {
+    try {
+      await rm(tempRoot, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  async function readArchivedRunJson(sessionRoot: string): Promise<RunJson> {
+    const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));
+    expect(dirs).toHaveLength(1);
+    const archivePath = join(sessionRoot, "q-ticketed", "model-alpha", dirs[0]);
+    return JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
+  }
+
+  async function readArchivedSession(sessionRoot: string): Promise<string> {
+    const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));
+    const archivePath = join(sessionRoot, "q-ticketed", "model-alpha", dirs[0]);
+    return readFile(join(archivePath, "session.jsonl"), "utf-8");
+  }
+
+  it("runs one invocation per ticket and records them in run.json", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-clean");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 2);
+
+    const stub = join(tempRoot, "stub-clean");
+    await createScriptedStubPi(stub, { 1: CLEAN_SESSION, 2: CLEAN_SESSION });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("ok");
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.status).toBe("ok");
+    expect(runJson.invocations).toBeDefined();
+    expect(runJson.invocations!).toHaveLength(2);
+    expect(runJson.invocations![0]).toMatchObject({
+      ticket: 1,
+      ticketTitle: "Ticket number 1",
+      dirty: false,
+      status: "ok",
+    });
+    expect(runJson.invocations![1]).toMatchObject({
+      ticket: 2,
+      ticketTitle: "Ticket number 2",
+      dirty: false,
+      status: "ok",
+    });
+
+    // Both invocations' transcripts are concatenated into one session.jsonl
+    const session = await readArchivedSession(sessionRoot);
+    const lines = session.trim().split("\n");
+    expect(lines).toHaveLength(2);
+  });
+
+  it("arbitrates a dirty invocation with an evaluation and continues on COMPLETE", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-eval-complete");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 2);
+
+    // Call 1: ticket 1 with a failed tool result (dirty) → evaluation.
+    // Call 2: evaluation verdict COMPLETE → continue. Call 3: ticket 2 clean.
+    const stub = join(tempRoot, "stub-eval-complete");
+    await createScriptedStubPi(stub, {
+      1: DIRTY_SESSION,
+      2: VERDICT_SESSION("COMPLETE"),
+      3: CLEAN_SESSION,
+    });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results[0].status).toBe("ok");
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.status).toBe("ok");
+    expect(runJson.invocations!).toHaveLength(3);
+    expect(runJson.invocations![0]).toMatchObject({ ticket: 1, dirty: true });
+    expect(runJson.invocations![1]).toMatchObject({
+      ticket: 1,
+      evaluation: true,
+      verdict: "complete",
+    });
+    expect(runJson.invocations![2]).toMatchObject({ ticket: 2, dirty: false });
+
+    // The evaluation transcript is part of the archived session.jsonl
+    const session = await readArchivedSession(sessionRoot);
+    expect(session).toContain("<verdict>COMPLETE</verdict>");
+  });
+
+  it("aborts the run when the evaluation verdict is INCOMPLETE", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-eval-incomplete");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 3);
+
+    // Call 1: ticket 1 dirty → evaluation. Call 2: verdict INCOMPLETE → abort.
+    const stub = join(tempRoot, "stub-eval-incomplete");
+    await createScriptedStubPi(stub, {
+      1: DIRTY_SESSION,
+      2: VERDICT_SESSION("INCOMPLETE"),
+    });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results[0].status).toBe("error");
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.status).toBe("error");
+    // Ticket 1 + its evaluation; tickets 2 and 3 never ran
+    expect(runJson.invocations!).toHaveLength(2);
+    expect(runJson.invocations![1]).toMatchObject({
+      ticket: 1,
+      evaluation: true,
+      verdict: "incomplete",
+    });
+
+    const session = await readArchivedSession(sessionRoot);
+    expect(session.trim().split("\n")).toHaveLength(2);
+  });
+
+  it("aborts the run when the evaluation verdict is missing", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-eval-missing");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 2);
+
+    // Call 1: dirty → evaluation. Call 2: no verdict marker → conservative abort.
+    const stub = join(tempRoot, "stub-eval-missing");
+    await createScriptedStubPi(stub, { 1: DIRTY_SESSION, 2: CLEAN_SESSION });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results[0].status).toBe("error");
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.invocations!).toHaveLength(2);
+    expect(runJson.invocations![1]).toMatchObject({
+      evaluation: true,
+      verdict: null,
+    });
+  });
+
+  it("trusts a COMPLETE verdict even when the evaluation had failed tool calls", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-eval-dirty");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 2);
+
+    // Call 1: ticket 1 dirty → evaluation.
+    // Call 2: evaluation transcript contains a benign isError tool result
+    //         AND an explicit COMPLETE verdict — the verdict must win.
+    // Call 3: ticket 2 clean.
+    const dirtyEvalSession =
+      '{"type":"message","message":{"role":"toolResult","toolName":"write","content":[{"type":"text","text":"disk full"}],"isError":true}}' +
+      "\n" +
+      VERDICT_SESSION("COMPLETE");
+    const stub = join(tempRoot, "stub-eval-dirty");
+    await createScriptedStubPi(stub, {
+      1: DIRTY_SESSION,
+      2: dirtyEvalSession,
+      3: CLEAN_SESSION,
+    });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results[0].status).toBe("ok");
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.invocations!).toHaveLength(3);
+    expect(runJson.invocations![1]).toMatchObject({
+      ticket: 1,
+      evaluation: true,
+      verdict: "complete",
+      dirty: true,
+    });
+    expect(runJson.invocations![2]).toMatchObject({ ticket: 2 });
+  });
+
+  it("does not trigger an evaluation for failed read-only tool calls", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-readonly-dirty");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 2);
+
+    // Call 1: ticket 1 with failed read/grep probes only — NOT dirty, no
+    // evaluation. Call 2: ticket 2 clean.
+    const readOnlyDirtySession =
+      '{"type":"message","message":{"role":"toolResult","toolName":"read","content":[{"type":"text","text":"ENOENT"}],"isError":true}}' +
+      "\n" +
+      '{"type":"message","message":{"role":"toolResult","toolName":"grep","content":[{"type":"text","text":"no match"}],"isError":true}}';
+    const stub = join(tempRoot, "stub-readonly-dirty");
+    await createScriptedStubPi(stub, {
+      1: readOnlyDirtySession,
+      2: CLEAN_SESSION,
+    });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results[0].status).toBe("ok");
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.invocations!).toHaveLength(2);
+    expect(runJson.invocations![0]).toMatchObject({ ticket: 1, dirty: false });
+    expect(runJson.invocations![1]).toMatchObject({ ticket: 2, dirty: false });
+  });
+
+  it("keeps the single-invocation flow when tickets.md has fewer than 2 tickets", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-single-ticket");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 1);
+
+    const stub = join(tempRoot, "stub-single");
+    await createScriptedStubPi(stub, { 1: CLEAN_SESSION });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results[0].status).toBe("ok");
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    // Single-invocation flow: no invocations array, no evaluation
+    expect(runJson.invocations).toBeUndefined();
+  });
+});

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import {
   mkdir,
   writeFile,
+  readFile,
   readdir,
   rename,
   copyFile,
@@ -196,7 +197,7 @@ function renderJsonEvent(line: string): void {
 
 /**
  * Shared pi execution environment: which binary, which config home,
- * where isolated workdirs live, and the turn budget per run.
+ * where isolated workdirs live, and the internal-turn budget per invocation.
  */
 export interface PiEnvironment {
   /** Absolute path to the pi executable (injectable for tests). */
@@ -205,75 +206,29 @@ export interface PiEnvironment {
   piHome: string;
   /** Directory under which the isolated working directory is created. */
   tempRoot: string;
-  /** Maximum assistant turns before the process is killed. */
+  /** Maximum assistant turns before the process is killed (per invocation). */
   maxTurns: number;
 }
 
 /**
- * Options for invoking the pi coding agent.
+ * An isolated workdir prepared for a run's invocations.
  */
-export interface PiRunOptions extends PiEnvironment {
-  /** The prompt to give to the agent. */
-  prompt: string;
-  /** The question being executed. */
-  question: Question;
-  /** Pi provider name (e.g., "llamacpp-local"). */
-  provider: string;
-  /** Model id within that provider. */
-  modelId: string;
-}
-
-/**
- * Result of a pi run.
- */
-export interface PiRunResult {
+export interface WorkdirSetup {
   /** Absolute path to the isolated working directory. */
   workdir: string;
-  /** Exit code of the pi process, or null if killed (e.g. max turns exceeded). */
-  exitCode: number | null;
-  /** True if the process was killed because it exceeded the max turn limit. */
-  maxTurnsExceeded: boolean;
-  /** Duration of the run in milliseconds. */
-  durationMs: number;
-  /**
-   * Absolute path of the normalized session.jsonl inside workdir,
-   * or null if pi produced no JSONL session file.
-   */
-  sessionFile: string | null;
-  /** Absolute path to the file capturing pi's stdout+stderr inside workdir. */
-  stdoutFile: string;
+  /** Extra pi arguments prepared during setup (e.g. --skill). */
+  extraArgs: string[];
 }
 
 /**
- * Run the pi coding agent with strict isolation:
- *
- * - Creates a fresh subdirectory under tempRoot (outside the repo).
- * - Copies spec.md / tickets.md from the question directory if present.
- * - Spawns piBin with the given prompt and model arguments.
- * - Captures stdout+stderr to pi-output.log in the workdir.
- * - Kills the process if it exceeds maxTurns.
- * - Renames the session JSONL file to session.jsonl.
+ * Create an isolated working directory under tempRoot and prepare it:
+ * copies spec.md / tickets.md from the question directory when present and
+ * links the chrome-devtools-axi skill for HTML page verification.
  */
-export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
-  // Reset module state for this run
-  aiSection = "idle";
-  aiStarted = false;
-  turnCount = 0;
-  maxTurnsExceeded = false;
-  killedForMaxTurns = false;
-  maxTurns = options.maxTurns;
-
-  const {
-    prompt,
-    question,
-    provider,
-    modelId,
-    piBin,
-    piHome,
-    tempRoot,
-  } = options;
-
-  // Create an isolated working directory under tempRoot
+export async function setupWorkdir(
+  question: Question,
+  tempRoot: string
+): Promise<WorkdirSetup> {
   const workdir = join(
     resolve(tempRoot),
     `pi-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -297,9 +252,6 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     log(`copied tickets.md to workdir`);
   }
 
-  // Path for capturing stdout+stderr
-  const stdoutFile = join(workdir, "pi-output.log");
-
   // Link chrome-devtools-axi skill into workdir for HTML page testing
   const skillsDir = join(workdir, ".skills");
   const chromeDevToolsSkillSrc = join(homedir(), ".agents", "skills", "chrome-devtools-axi", "SKILL.md");
@@ -313,6 +265,94 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   } catch {
     log(`chrome-devtools-axi skill not available, skipping`);
   }
+
+  return { workdir, extraArgs };
+}
+
+/**
+ * Options for a single pi invocation within a run.
+ */
+export interface InvocationOptions {
+  /** The prompt to give to the agent. */
+  prompt: string;
+  /** The prepared isolated working directory (pi's cwd and session dir). */
+  workdir: string;
+  /**
+   * Unique session id for this invocation (e.g. "session", "t1", "t1-eval").
+   * The produced JSONL is normalized to <sessionId>.jsonl in the workdir.
+   */
+  sessionId: string;
+  /** Extra pi arguments from workdir setup (e.g. --skill). */
+  extraArgs: string[];
+  /** Pi provider name (e.g., "llamacpp-local"). */
+  provider: string;
+  /** Model id within that provider. */
+  modelId: string;
+  /** Absolute path to the pi executable. */
+  piBin: string;
+  /** Absolute path for PI_CODING_AGENT_DIR environment variable. */
+  piHome: string;
+  /** Maximum assistant turns before the process is killed. */
+  maxTurns: number;
+}
+
+/**
+ * Result of a single pi invocation.
+ */
+export interface InvocationResult {
+  /** The session id that was invoked. */
+  sessionId: string;
+  /** Exit code of the pi process, or null if killed (e.g. max turns exceeded). */
+  exitCode: number | null;
+  /** True if the process was killed because it exceeded the max turn limit. */
+  maxTurnsExceeded: boolean;
+  /** Duration of the invocation in milliseconds. */
+  durationMs: number;
+  /**
+   * Absolute path of the normalized <sessionId>.jsonl inside the workdir,
+   * or null if pi produced no new JSONL session file.
+   */
+  sessionFile: string | null;
+  /** Absolute path to the captured stdout+stderr log inside the workdir. */
+  stdoutFile: string;
+}
+
+/**
+ * Run one pi invocation in an already-prepared workdir:
+ *
+ * - Spawns piBin with the given prompt, model arguments, and --session-id.
+ * - Captures stdout+stderr to pi-output-<sessionId>.log in the workdir.
+ * - Kills the process if it exceeds maxTurns.
+ * - Renames the invocation's new session JSONL file to <sessionId>.jsonl.
+ */
+export async function runInvocation(options: InvocationOptions): Promise<InvocationResult> {
+  // Reset module state for this invocation
+  aiSection = "idle";
+  aiStarted = false;
+  turnCount = 0;
+  maxTurnsExceeded = false;
+  killedForMaxTurns = false;
+  maxTurns = options.maxTurns;
+
+  const {
+    prompt,
+    workdir,
+    sessionId,
+    extraArgs,
+    provider,
+    modelId,
+    piBin,
+    piHome,
+  } = options;
+
+  // Snapshot existing session files so we can tell which one this
+  // invocation produced.
+  const beforeJsonl = new Set(
+    (await readdir(workdir)).filter((f) => f.endsWith(".jsonl"))
+  );
+
+  // Path for capturing stdout+stderr
+  const stdoutFile = join(workdir, `pi-output-${sessionId}.log`);
 
   // Build the pi command arguments
   const args: string[] = [
@@ -330,7 +370,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     `--session-dir`,
     workdir,
     `--session-id`,
-    "session",
+    sessionId,
     prompt,
   ];
 
@@ -416,18 +456,20 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   await writeFile(stdoutFile, Buffer.concat(chunks));
   log(`wrote output log: ${stdoutFile}`);
 
-  // Find and normalize the session JSONL file
+  // Find the session JSONL this invocation produced and normalize its name
   let sessionFile: string | null = null;
   try {
     const entries = await readdir(workdir);
-    const jsonlFiles = entries.filter((f) => f.endsWith(".jsonl"));
+    const newJsonl = entries.filter(
+      (f) => f.endsWith(".jsonl") && !beforeJsonl.has(f)
+    );
 
-    if (jsonlFiles.length >= 1) {
-      // pi normally writes exactly one session file (--session-dir + --session-id);
-      // if several exist, keep the most recently modified one.
-      let newest = jsonlFiles[0];
+    if (newJsonl.length >= 1) {
+      // pi normally writes exactly one session file per invocation
+      // (--session-dir + --session-id); if several appear, keep the newest.
+      let newest = newJsonl[0];
       let newestMtime = 0;
-      for (const f of jsonlFiles) {
+      for (const f of newJsonl) {
         const mtime = (await stat(join(workdir, f))).mtimeMs;
         if (mtime >= newestMtime) {
           newest = f;
@@ -435,16 +477,16 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
         }
       }
       const srcPath = join(workdir, newest);
-      const dstPath = join(workdir, "session.jsonl");
-      // Only rename if it's not already named session.jsonl
-      if (newest !== "session.jsonl") {
+      const dstPath = join(workdir, `${sessionId}.jsonl`);
+      // Only rename if it's not already named <sessionId>.jsonl
+      if (newest !== `${sessionId}.jsonl`) {
         await rename(srcPath, dstPath);
-        log(`renamed ${newest} to session.jsonl`);
+        log(`renamed ${newest} to ${sessionId}.jsonl`);
       }
       sessionFile = dstPath;
       log(`found session file: ${sessionFile}`);
     } else {
-      log(`no .jsonl files found in workdir`);
+      log(`no new .jsonl files found in workdir`);
     }
   } catch (err) {
     log(`error finding session file: ${err}`);
@@ -453,11 +495,113 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   const durationMs = Date.now() - startTime;
 
   return {
-    workdir,
+    sessionId,
     exitCode,
     maxTurnsExceeded: killedForMaxTurns,
     durationMs,
     sessionFile,
     stdoutFile,
   };
+}
+
+/**
+ * Tool names whose failures are treated as benign probing noise: read-only
+ * operations (read, grep, glob, ls, ...). A failed read never makes an
+ * invocation dirty. Failures of anything else — edit, write, bash, or an
+ * unknown tool — count as write-operation failures, since they may mean an
+ * intended change (or verification command) did not land.
+ */
+const READ_ONLY_TOOLS = new Set([
+  "read",
+  "grep",
+  "glob",
+  "ls",
+  "find",
+  "search",
+]);
+
+/**
+ * Check whether a session transcript contains a failed WRITE-side tool
+ * result (`isError: true` from edit/write/bash/unknown tools) — one of the
+ * signals that mark an invocation dirty. Failures of read-only tools are
+ * ignored: models probe paths all the time.
+ */
+export async function sessionHasWriteToolErrors(sessionFile: string): Promise<boolean> {
+  let content: string;
+  try {
+    content = await readFile(sessionFile, "utf-8");
+  } catch {
+    return false;
+  }
+
+  const isWriteSide = (toolName: unknown): boolean =>
+    !READ_ONLY_TOOLS.has(String(toolName ?? "").toLowerCase());
+
+  for (const line of content.split("\n")) {
+    if (!line.includes("isError")) continue;
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (obj.type !== "message") continue;
+    const msg = obj.message as Record<string, unknown> | undefined;
+    if (!msg) continue;
+
+    // pi's native format: role "toolResult" with isError + toolName on the message
+    if (msg.isError === true && isWriteSide(msg.toolName)) {
+      return true;
+    }
+    // Content-item format: toolResult items inside an assistant message
+    if (Array.isArray(msg.content)) {
+      for (const item of msg.content as Array<Record<string, unknown>>) {
+        if (item.type === "toolResult" && item.isError === true) {
+          // No tool name available on the item → conservatively write-side
+          if (isWriteSide(item.toolName ?? msg.toolName)) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Parse the verdict from an evaluation invocation's transcript: the last
+ * `<verdict>COMPLETE</verdict>` / `<verdict>INCOMPLETE</verdict>` marker in
+ * an assistant message. Returns null when no marker is present (the runner
+ * treats an unparseable verdict as INCOMPLETE, conservatively).
+ */
+export async function parseVerdict(
+  sessionFile: string
+): Promise<"complete" | "incomplete" | null> {
+  let content: string;
+  try {
+    content = await readFile(sessionFile, "utf-8");
+  } catch {
+    return null;
+  }
+
+  const lines = content.split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+    const msg = obj.message as Record<string, unknown> | undefined;
+    if (obj.type !== "message" || msg?.role !== "assistant" || !Array.isArray(msg.content)) {
+      continue;
+    }
+    const text = (msg.content as Array<Record<string, unknown>>)
+      .filter((item) => item.type === "text")
+      .map((item) => String(item.text ?? ""))
+      .join("\n");
+    const m = text.match(/<verdict>\s*(COMPLETE|INCOMPLETE)\s*<\/verdict>/i);
+    if (m) {
+      return m[1].toLowerCase() === "complete" ? "complete" : "incomplete";
+    }
+  }
+  return null;
 }

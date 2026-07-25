@@ -12,9 +12,19 @@ import { join, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { loadConfig, loadRegistry, type RegistryModel } from "./registry";
-import { loadQuestions, type Question } from "./question";
-import { buildPrompt } from "./prompt";
-import { runPi, type PiEnvironment, type PiRunResult } from "./pi-runner";
+import { loadQuestions, type Question, type Ticket } from "./question";
+import {
+  buildPrompt,
+  buildTicketPrompt,
+  buildEvaluationPrompt,
+} from "./prompt";
+import {
+  setupWorkdir,
+  runInvocation,
+  sessionHasWriteToolErrors,
+  parseVerdict,
+  type PiEnvironment,
+} from "./pi-runner";
 
 const log = (msg: string) => {
   if (process.env.NODE_ENV !== "test") console.error(`[matrix] ${msg}`);
@@ -78,6 +88,36 @@ export interface RunComboOutcome {
 }
 
 /**
+ * Per-invocation outcome recorded in run.json's invocations array.
+ */
+export interface InvocationRecord {
+  /** 1-based ticket index (omitted for single-invocation runs). */
+  ticket?: number;
+  /** Ticket title from tickets.md (omitted for single-invocation runs). */
+  ticketTitle?: string;
+  /** True for evaluation invocations arbitrating a dirty ticket invocation. */
+  evaluation?: boolean;
+  /**
+   * Parsed verdict for evaluation invocations. Null means the verdict was
+   * missing or unparseable — treated as INCOMPLETE (conservative abort).
+   */
+  verdict?: "complete" | "incomplete" | null;
+  /**
+   * Dirty signals: non-zero exit, max-turns kill, or an isError tool result
+   * in the transcript.
+   */
+  dirty: boolean;
+  /** Invocation status: "ok" or "error" (exit code / max-turns based). */
+  status: "ok" | "error";
+  /** Exit code from pi, or null if killed (e.g. max turns exceeded). */
+  exitCode: number | null;
+  /** True if this invocation was killed for exceeding the max turn limit. */
+  maxTurnsExceeded: boolean;
+  /** Duration of the invocation in milliseconds. */
+  durationMs: number;
+}
+
+/**
  * Shape of the run.json file written for each archived session.
  */
 export interface RunJson {
@@ -124,6 +164,11 @@ export interface RunJson {
   maxTurns: number;
   /** Artifact contract violation messages (empty if compliant). */
   contractViolations: string[];
+  /**
+   * Per-invocation records for per-ticket runs (absent for the
+   * single-invocation flow). Includes evaluation invocations.
+   */
+  invocations?: InvocationRecord[];
 }
 
 /**
@@ -172,17 +217,18 @@ function validateArtifactContract(files: string[]): string[] {
 
   // Check for unexpected files (ignore run infrastructure and copied inputs)
   const allowedExtras = new Set([
-    "session.jsonl",
     "run.json",
-    "pi-output.log",
     "spec.md",
     "tickets.md",
     ".skills",
   ]);
   for (const f of actual) {
-    if (!expected.has(f) && !allowedExtras.has(f)) {
-      violations.push(`unexpected file: ${f}`);
-    }
+    if (expected.has(f) || allowedExtras.has(f)) continue;
+    // Session transcripts (session.jsonl, t1.jsonl, ...) and pi output logs
+    // are run infrastructure, not artifact content.
+    if (f.endsWith(".jsonl")) continue;
+    if (/^pi-output.*\.log$/.test(f)) continue;
+    violations.push(`unexpected file: ${f}`);
   }
 
   return violations;
@@ -232,7 +278,9 @@ async function stripSessionImageData(archiveDir: string): Promise<void> {
 }
 
 /**
- * Copy artifact files (.html, .css, .js) and session.jsonl from workdir to archive.
+ * Copy artifact files (.html, .css, .js) from workdir to archive.
+ * The transcript is archived separately by concatenating the invocations'
+ * session files (see concatenateSessions).
  */
 async function copyArtifacts(
   workdir: string,
@@ -244,14 +292,30 @@ async function copyArtifacts(
 
   for (const f of files) {
     const ext = f.slice(f.lastIndexOf("."));
-    // Copy session.jsonl and all artifact files
-    if (f === "session.jsonl" || artifactExtensions.has(ext)) {
+    if (artifactExtensions.has(ext)) {
       await copyFile(join(workdir, f), join(archiveDir, f));
       copied.push(f);
     }
   }
 
   return copied;
+}
+
+/**
+ * Concatenate the invocations' session JSONL files (in execution order,
+ * evaluation invocations included) into the archived session.jsonl.
+ */
+async function concatenateSessions(
+  sessionFiles: string[],
+  archiveDir: string
+): Promise<void> {
+  if (sessionFiles.length === 0) return;
+  const parts: string[] = [];
+  for (const f of sessionFiles) {
+    parts.push((await readFile(f, "utf-8")).replace(/\n+$/, ""));
+  }
+  await writeFile(join(archiveDir, "session.jsonl"), parts.join("\n") + "\n", "utf-8");
+  log(`concatenated ${sessionFiles.length} session file(s) into session.jsonl`);
 }
 
 /**
@@ -346,7 +410,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       progress(`Starting: ${label}`);
 
       let status: "ok" | "error" = "ok";
-      let exitCode: number | null;
+      let exitCode: number | null = null;
       let durationMs: number;
       let maxTurnsExceeded = false;
       // A model may override the global max turn limit when it needs
@@ -354,29 +418,125 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       const effectiveMaxTurns = model.maxTurns ?? maxTurns;
 
       try {
-        // Build prompt for this question
-        const prompt = buildPrompt(question, runRules);
-        log(`built prompt (${prompt.length} chars) for ${question.name}`);
+        // Per-ticket flow (ADR 0007): one pi invocation per ticket when
+        // tickets.md parses into >= 2 tickets; otherwise the classic
+        // single-invocation flow with an unchanged prompt.
+        const perTicket = question.tickets.length >= 2;
+        const setup = await setupWorkdir(question, tempRoot);
 
-        // Run pi in an isolated workdir
-        const result: PiRunResult = await runPi({
-          prompt,
-          question,
-          provider: model.provider,
-          modelId: model.modelId,
-          piBin,
-          piHome,
-          tempRoot,
-          maxTurns: effectiveMaxTurns,
-        });
+        type Planned = { sessionId: string; prompt: string; ticket?: Ticket };
+        const plan: Planned[] = perTicket
+          ? question.tickets.map((t) => ({
+              sessionId: `t${t.index}`,
+              prompt: buildTicketPrompt(question, t, question.tickets.length, runRules),
+              ticket: t,
+            }))
+          : [{ sessionId: "session", prompt: buildPrompt(question, runRules) }];
+        log(`planned ${plan.length} invocation(s) for ${question.name}${perTicket ? " (per-ticket)" : ""}`);
 
-        durationMs = result.durationMs;
-        exitCode = result.exitCode;
-        maxTurnsExceeded = result.maxTurnsExceeded;
+        const invocations: InvocationRecord[] = [];
+        const sessionFiles: string[] = [];
 
-        if (result.exitCode !== 0) {
-          status = "error";
+        for (const step of plan) {
+          const label = step.ticket
+            ? `ticket ${step.ticket.index}/${plan.length}: ${step.ticket.title}`
+            : "single invocation";
+          progress(`  → ${step.sessionId}: ${label}`);
+
+          const res = await runInvocation({
+            prompt: step.prompt,
+            workdir: setup.workdir,
+            sessionId: step.sessionId,
+            extraArgs: setup.extraArgs,
+            provider: model.provider,
+            modelId: model.modelId,
+            piBin,
+            piHome,
+            maxTurns: effectiveMaxTurns,
+          });
+
+          if (res.sessionFile) sessionFiles.push(res.sessionFile);
+          exitCode = res.exitCode;
+          if (res.maxTurnsExceeded) maxTurnsExceeded = true;
+
+          const toolErrors = res.sessionFile
+            ? await sessionHasWriteToolErrors(res.sessionFile)
+            : false;
+          // Dirty signals: non-zero exit, max-turns kill, or a failed
+          // write-side tool result (read-only tool failures are benign).
+          const dirty = res.exitCode !== 0 || res.maxTurnsExceeded || toolErrors;
+
+          invocations.push({
+            ticket: step.ticket?.index,
+            ticketTitle: step.ticket?.title,
+            dirty,
+            status: res.exitCode === 0 && !res.maxTurnsExceeded ? "ok" : "error",
+            exitCode: res.exitCode,
+            maxTurnsExceeded: res.maxTurnsExceeded,
+            durationMs: res.durationMs,
+          });
+
+          if (!perTicket) {
+            if (res.exitCode !== 0) status = "error";
+            continue;
+          }
+
+          if (dirty && step.ticket) {
+            // Arbitrate: an evaluation invocation decides whether the ticket
+            // was actually completed despite the dirty signals.
+            progress(`  → ${step.sessionId}-eval: evaluating ticket ${step.ticket.index}`);
+            const evalRes = await runInvocation({
+              prompt: buildEvaluationPrompt(question, step.ticket, plan.length),
+              workdir: setup.workdir,
+              sessionId: `${step.sessionId}-eval`,
+              extraArgs: setup.extraArgs,
+              provider: model.provider,
+              modelId: model.modelId,
+              piBin,
+              piHome,
+              maxTurns: effectiveMaxTurns,
+            });
+
+            if (evalRes.sessionFile) sessionFiles.push(evalRes.sessionFile);
+            if (evalRes.maxTurnsExceeded) maxTurnsExceeded = true;
+
+            const evalToolErrors = evalRes.sessionFile
+              ? await sessionHasWriteToolErrors(evalRes.sessionFile)
+              : false;
+            const evalDirty =
+              evalRes.exitCode !== 0 || evalRes.maxTurnsExceeded || evalToolErrors;
+            // A crashed or killed evaluation, or a missing/unparseable
+            // verdict, is treated as INCOMPLETE (conservative abort).
+            // Failed tool results inside the evaluation do NOT invalidate
+            // an explicit verdict — the verdict marker is the evaluator's
+            // deliberate final answer (a benign isError must not discard it).
+            const verdict =
+              evalRes.exitCode !== 0 || evalRes.maxTurnsExceeded || !evalRes.sessionFile
+                ? null
+                : await parseVerdict(evalRes.sessionFile);
+
+            invocations.push({
+              ticket: step.ticket.index,
+              ticketTitle: step.ticket.title,
+              evaluation: true,
+              verdict,
+              dirty: evalDirty,
+              status: evalRes.exitCode === 0 && !evalRes.maxTurnsExceeded ? "ok" : "error",
+              exitCode: evalRes.exitCode,
+              maxTurnsExceeded: evalRes.maxTurnsExceeded,
+              durationMs: evalRes.durationMs,
+            });
+
+            if (verdict !== "complete") {
+              progress(`  ✗ ticket ${step.ticket.index} judged incomplete — aborting run`);
+              status = "error";
+              break;
+            }
+            progress(`  ✓ ticket ${step.ticket.index} judged complete despite dirty signals`);
+          }
         }
+
+        durationMs = Date.now() - Date.parse(startedAt);
 
         // Determine archive directory: sessionRoot/<question>/<model>/<timestamp>/
         const timestamp = formatTimestamp(new Date());
@@ -389,18 +549,21 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         await mkdir(archiveDir, { recursive: true });
 
         // Copy artifacts from workdir to archive
-        await copyArtifacts(result.workdir, archiveDir);
+        await copyArtifacts(setup.workdir, archiveDir);
         log(`archived to: ${archiveDir}`);
+
+        // Concatenate the invocations' transcripts into session.jsonl
+        await concatenateSessions(sessionFiles, archiveDir);
 
         // Strip image data from session.jsonl to keep archive size manageable
         await stripSessionImageData(archiveDir);
 
         // Validate artifact contract against files in workdir
-        const workdirFiles = await readdir(result.workdir);
+        const workdirFiles = await readdir(setup.workdir);
         const contractViolations = validateArtifactContract(workdirFiles);
 
         // A Session is transcript + artifact, inseparable — flag a missing transcript
-        if (!result.sessionFile) {
+        if (sessionFiles.length === 0) {
           contractViolations.push("missing transcript: session.jsonl");
         }
         if (contractViolations.length > 0) {
@@ -432,6 +595,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           maxTurnsExceeded,
           maxTurns: effectiveMaxTurns,
           contractViolations,
+          invocations: perTicket ? invocations : undefined,
         };
 
         await writeFile(
@@ -442,7 +606,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         log(`wrote run.json to archive`);
 
         // Delete the isolated workdir after archiving
-        await rm(result.workdir, { recursive: true, force: true });
+        await rm(setup.workdir, { recursive: true, force: true });
         log(`deleted workdir`);
 
         outcomes.push({

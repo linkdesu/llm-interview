@@ -12,6 +12,10 @@ _Avoid_: task, prompt file
 A single execution: one Question executed once by pi.dev under one model + parameter combination. The smallest unit of comparison. A Run's working directory is an isolated temp area outside the repo — the model cannot see the project's AGENTS.md, other Sessions' artifacts, or any project file; artifacts and transcript are collected into the archive afterwards.
 _Avoid_: execution, combo run
 
+**Pi Invocation**:
+One invocation of the pi agent within a Run: either the execution of one ticket (when the Question's tickets.md parses into ≥ 2 tickets) or an evaluation pass arbitrating a dirty invocation. Each invocation gets a fresh session and context; all invocations of a Run share one isolated workdir. Distinct from pi's internal *turn* — one model iteration within an invocation, counted by `maxTurns` (ADR 0003).
+_Avoid_: step, phase, runner turn
+
 **Session**:
 The complete archive unit of a Run, stored in a per-Run directory under `session/`, containing the transcript (JSONL), the Artifact, and `run.json` — never separated.
 _Avoid_: transcript, conversation log, output (never call the artifact alone "output")

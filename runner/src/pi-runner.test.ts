@@ -103,6 +103,7 @@ function makeMockQuestion(
       intent: "# Test intent\nDo something.",
       hasSpec: options.hasSpec ?? false,
       hasTickets: options.hasTickets ?? false,
+      tickets: [],
     },
     dir,
   };
@@ -122,167 +123,203 @@ async function setupQuestionDir(
   }
 }
 
+async function makePiHome(): Promise<string> {
+  const piHome = join(testRoot, "pi-home");
+  await mkdir(piHome, { recursive: true });
+  return piHome;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("runPi", () => {
-  it("should be exported as a function", async () => {
+describe("setupWorkdir", () => {
+  it("is exported as a function", async () => {
     const mod = await import("./pi-runner");
-    expect(typeof mod.runPi).toBe("function");
+    expect(typeof mod.setupWorkdir).toBe("function");
+    expect(typeof mod.runInvocation).toBe("function");
   });
 
-  it("creates a fresh workdir under tempRoot and runs pi successfully", async () => {
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("normal-exit");
+  it("creates a fresh workdir under tempRoot", async () => {
+    const { setupWorkdir } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("setup-normal");
     await setupQuestionDir(dir, {});
 
-    const tempRoot = join(testRoot, "tmp-normal");
+    const tempRoot = join(testRoot, "tmp-setup");
     await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
 
-    const result = await runPi({
-      prompt: "Hello agent",
-      question,
-      provider: "llamacpp-local",
-      modelId: "my-model",
-      piBin: stubNormal,
-      piHome,
-      tempRoot,
-    });
-
-    // Workdir is under tempRoot, not inside the repo
-    expect(result.workdir).toContain(tempRoot);
-    expect(result.exitCode).toBe(0);
-    expect(result.durationMs).toBeGreaterThan(0);
-    expect(result.sessionFile).toBeTruthy();
-    expect(result.sessionFile).toContain("session.jsonl");
-    expect(result.stdoutFile).toContain("pi-output.log");
-
-    // Session file exists and contains JSONL
-    const sessionPath = result.sessionFile!;
-    const sessionContent = await readFile(sessionPath, "utf-8");
-    const lines = sessionContent.trim().split("\n");
-    expect(lines.length).toBeGreaterThan(0);
-    JSON.parse(lines[0]); // should be valid JSON
-
-    // Stdout file exists
-    await access(result.stdoutFile);
+    const setup = await setupWorkdir(question, tempRoot);
+    expect(setup.workdir).toContain(tempRoot);
+    await access(setup.workdir);
   });
 
   it("copies spec.md and tickets.md into workdir when present", async () => {
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("with-files", {
+    const { setupWorkdir } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("setup-with-files", {
       hasSpec: true,
       hasTickets: true,
     });
     await setupQuestionDir(dir, {
       specContent: "# Spec\nRequirements here.",
-      ticketsContent: "- [ ] Ticket 1",
+      ticketsContent: "[ ]1. Ticket one\n[ ]2. Ticket two",
     });
 
-    const tempRoot = join(testRoot, "tmp-with-files");
+    const tempRoot = join(testRoot, "tmp-setup-files");
     await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
 
-    const result = await runPi({
-      prompt: "Implement the spec",
-      question,
-      provider: "llamacpp-local",
-      modelId: "my-model",
-      piBin: stubNormal,
-      piHome,
-      tempRoot,
-    });
+    const setup = await setupWorkdir(question, tempRoot);
 
-    // Verify spec.md was copied
-    const specPath = join(result.workdir, "spec.md");
-    const specContent = await readFile(specPath, "utf-8");
+    const specContent = await readFile(join(setup.workdir, "spec.md"), "utf-8");
     expect(specContent).toBe("# Spec\nRequirements here.");
 
-    // Verify tickets.md was copied
-    const ticketsPath = join(result.workdir, "tickets.md");
-    const ticketsContent = await readFile(ticketsPath, "utf-8");
-    expect(ticketsContent).toBe("- [ ] Ticket 1");
+    const ticketsContent = await readFile(join(setup.workdir, "tickets.md"), "utf-8");
+    expect(ticketsContent).toBe("[ ]1. Ticket one\n[ ]2. Ticket two");
   });
 
   it("does not copy spec.md/tickets.md when they are absent", async () => {
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("no-files", {
-      hasSpec: false,
-      hasTickets: false,
-    });
+    const { setupWorkdir } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("setup-no-files");
     await setupQuestionDir(dir, {});
 
-    const tempRoot = join(testRoot, "tmp-no-files");
+    const tempRoot = join(testRoot, "tmp-setup-nofiles");
     await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
 
-    const result = await runPi({
-      prompt: "Hello",
-      question,
-      provider: "llamacpp-local",
-      modelId: "my-model",
-      piBin: stubNormal,
-      piHome,
-      tempRoot,
-    });
+    const setup = await setupWorkdir(question, tempRoot);
 
-    const specExists = await access(join(result.workdir, "spec.md"))
+    const specExists = await access(join(setup.workdir, "spec.md"))
       .then(() => true)
       .catch(() => false);
-    const ticketsExists = await access(join(result.workdir, "tickets.md"))
+    const ticketsExists = await access(join(setup.workdir, "tickets.md"))
       .then(() => true)
       .catch(() => false);
 
     expect(specExists).toBe(false);
     expect(ticketsExists).toBe(false);
   });
+});
 
-  it("captures non-zero exit code from pi", async () => {
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("fail");
+describe("runInvocation", () => {
+  it("runs pi successfully and normalizes the session file to <sessionId>.jsonl", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-normal");
     await setupQuestionDir(dir, {});
 
-    const tempRoot = join(testRoot, "tmp-fail");
+    const tempRoot = join(testRoot, "tmp-inv-normal");
     await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
 
-    const result = await runPi({
+    const result = await runInvocation({
+      prompt: "Hello agent",
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stubNormal,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.maxTurnsExceeded).toBe(false);
+    expect(result.durationMs).toBeGreaterThan(0);
+    expect(result.sessionFile).toBeTruthy();
+    expect(result.sessionFile).toContain("t1.jsonl");
+    expect(result.stdoutFile).toContain("pi-output-t1.log");
+
+    // Session file exists and contains valid JSONL
+    const sessionContent = await readFile(result.sessionFile!, "utf-8");
+    const lines = sessionContent.trim().split("\n");
+    expect(lines.length).toBeGreaterThan(0);
+    JSON.parse(lines[0]); // should be valid JSON
+
+    // Stdout log exists
+    await access(result.stdoutFile);
+  });
+
+  it("keeps multiple invocations' session files side by side in one workdir", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-multi");
+    await setupQuestionDir(dir, {});
+
+    const tempRoot = join(testRoot, "tmp-inv-multi");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+    const piHome = await makePiHome();
+
+    const first = await runInvocation({
+      prompt: "Ticket one",
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stubNormal,
+      piHome,
+      maxTurns: 100,
+    });
+    const second = await runInvocation({
+      prompt: "Ticket two",
+      workdir: setup.workdir,
+      sessionId: "t2",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stubNormal,
+      piHome,
+      maxTurns: 100,
+    });
+
+    expect(first.sessionFile).toContain("t1.jsonl");
+    expect(second.sessionFile).toContain("t2.jsonl");
+    // Both transcripts survive side by side
+    await access(first.sessionFile!);
+    await access(second.sessionFile!);
+  });
+
+  it("captures non-zero exit code from pi", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-fail");
+    await setupQuestionDir(dir, {});
+
+    const tempRoot = join(testRoot, "tmp-inv-fail");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const result = await runInvocation({
       prompt: "Fail me",
-      question,
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
       modelId: "my-model",
       piBin: stubFail,
-      piHome,
-      tempRoot,
+      piHome: await makePiHome(),
+      maxTurns: 100,
     });
 
     expect(result.exitCode).toBe(42);
   });
 
-  it("captures stdout/stderr to pi-output.log", async () => {
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("stdout");
+  it("captures stdout/stderr to pi-output-<sessionId>.log", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-stdout");
     await setupQuestionDir(dir, {});
 
-    const tempRoot = join(testRoot, "tmp-stdout");
+    const tempRoot = join(testRoot, "tmp-inv-stdout");
     await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
 
-    const result = await runPi({
+    const result = await runInvocation({
       prompt: "Output something",
-      question,
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
       modelId: "my-model",
       piBin: stubNormal,
-      piHome,
-      tempRoot,
+      piHome: await makePiHome(),
+      maxTurns: 100,
     });
 
     const logContent = await readFile(result.stdoutFile, "utf-8");
@@ -291,7 +328,6 @@ describe("runPi", () => {
   });
 
   it("sets sessionFile to null when pi produces no JSONL", async () => {
-    // Create a stub that exits 0 but writes no session file
     const stubEmpty = join(stubBinDir, "pi-empty");
     await writeFile(
       stubEmpty,
@@ -299,51 +335,144 @@ describe("runPi", () => {
     );
     await Bun.$`chmod +x ${stubEmpty}`;
 
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("no-session");
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-no-session");
     await setupQuestionDir(dir, {});
 
-    const tempRoot = join(testRoot, "tmp-no-session");
+    const tempRoot = join(testRoot, "tmp-inv-no-session");
     await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
 
-    const result = await runPi({
+    const result = await runInvocation({
       prompt: "No session",
-      question,
+      workdir: setup.workdir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
       modelId: "my-model",
       piBin: stubEmpty,
-      piHome,
-      tempRoot,
+      piHome: await makePiHome(),
+      maxTurns: 100,
     });
 
     expect(result.sessionFile).toBeNull();
   });
+});
 
-  it("passes correct arguments to pi including --model provider/modelId", async () => {
-    const { runPi } = await import("./pi-runner");
-    const { question, dir } = makeMockQuestion("args");
-    await setupQuestionDir(dir, {});
-
-    const tempRoot = join(testRoot, "tmp-args");
-    await mkdir(tempRoot, { recursive: true });
-    const piHome = join(testRoot, "pi-home");
-    await mkdir(piHome, { recursive: true });
-
-    const result = await runPi({
-      prompt: "Test args",
-      question,
-      provider: "llamacpp-local",
-      modelId: "test-model-123",
-      piBin: stubNormal,
-      piHome,
-      tempRoot,
+describe("sessionHasWriteToolErrors", () => {
+  const toolResultLine = (toolName: string | null, isError: boolean) =>
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "toolResult",
+        toolName,
+        content: [{ type: "text", text: "boom" }],
+        isError,
+      },
     });
 
-    // The stub normal script should have created the session file using the args
-    // This indirectly verifies args were passed correctly
-    expect(result.sessionFile).toBeTruthy();
-    expect(result.exitCode).toBe(0);
+  it("detects a failed write tool (pi's native toolResult format)", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    const f = join(testRoot, "dirty-write.jsonl");
+    await writeFile(f, toolResultLine("write", true) + "\n");
+    expect(await sessionHasWriteToolErrors(f)).toBe(true);
+  });
+
+  it("detects a failed edit tool", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    const f = join(testRoot, "dirty-edit.jsonl");
+    await writeFile(f, toolResultLine("edit", true) + "\n");
+    expect(await sessionHasWriteToolErrors(f)).toBe(true);
+  });
+
+  it("detects a failed bash command (bash can mutate files)", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    const f = join(testRoot, "dirty-bash.jsonl");
+    await writeFile(f, toolResultLine("bash", true) + "\n");
+    expect(await sessionHasWriteToolErrors(f)).toBe(true);
+  });
+
+  it("treats an unknown tool's failure as write-side (conservative)", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    const f = join(testRoot, "dirty-unknown.jsonl");
+    await writeFile(f, toolResultLine("some_extension_tool", true) + "\n");
+    expect(await sessionHasWriteToolErrors(f)).toBe(true);
+  });
+
+  it("ignores failed read-only tools (read, grep)", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    const f = join(testRoot, "dirty-readonly.jsonl");
+    await writeFile(
+      f,
+      toolResultLine("read", true) + "\n" + toolResultLine("grep", true) + "\n"
+    );
+    expect(await sessionHasWriteToolErrors(f)).toBe(false);
+  });
+
+  it("detects failures in the content-item toolResult format", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    const f = join(testRoot, "dirty-content-item.jsonl");
+    await writeFile(
+      f,
+      '{"type":"message","message":{"role":"assistant","content":[{"type":"toolResult","isError":true}]}}\n'
+    );
+    expect(await sessionHasWriteToolErrors(f)).toBe(true);
+  });
+
+  it("returns false for a clean transcript", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    const f = join(testRoot, "clean.jsonl");
+    await writeFile(
+      f,
+      toolResultLine("write", false) + "\n" + toolResultLine("read", false) + "\n"
+    );
+    expect(await sessionHasWriteToolErrors(f)).toBe(false);
+  });
+
+  it("returns false for a missing file", async () => {
+    const { sessionHasWriteToolErrors } = await import("./pi-runner");
+    expect(await sessionHasWriteToolErrors(join(testRoot, "nope.jsonl"))).toBe(false);
+  });
+});
+
+describe("parseVerdict", () => {
+  const verdictLine = (verdict: string) =>
+    JSON.stringify({
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: `Judgment done.\n<verdict>${verdict}</verdict>` }],
+      },
+    });
+
+  it("parses COMPLETE from the last assistant message", async () => {
+    const { parseVerdict } = await import("./pi-runner");
+    const f = join(testRoot, "verdict-complete.jsonl");
+    await writeFile(f, verdictLine("COMPLETE") + "\n");
+    expect(await parseVerdict(f)).toBe("complete");
+  });
+
+  it("parses INCOMPLETE case-insensitively", async () => {
+    const { parseVerdict } = await import("./pi-runner");
+    const f = join(testRoot, "verdict-incomplete.jsonl");
+    await writeFile(f, verdictLine("Incomplete") + "\n");
+    expect(await parseVerdict(f)).toBe("incomplete");
+  });
+
+  it("prefers the last marker when several assistant messages carry one", async () => {
+    const { parseVerdict } = await import("./pi-runner");
+    const f = join(testRoot, "verdict-multi.jsonl");
+    await writeFile(f, verdictLine("INCOMPLETE") + "\n" + verdictLine("COMPLETE") + "\n");
+    expect(await parseVerdict(f)).toBe("complete");
+  });
+
+  it("returns null when no verdict marker exists", async () => {
+    const { parseVerdict } = await import("./pi-runner");
+    const f = join(testRoot, "verdict-none.jsonl");
+    await writeFile(
+      f,
+      '{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"no verdict here"}]}}\n'
+    );
+    expect(await parseVerdict(f)).toBeNull();
   });
 });

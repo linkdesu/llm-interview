@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { type Question } from "./question";
-import { ARTIFACT_CONTRACT, buildPrompt } from "./prompt";
+import { type Question, type Ticket } from "./question";
+import {
+  ARTIFACT_CONTRACT,
+  buildPrompt,
+  buildTicketPrompt,
+  buildEvaluationPrompt,
+} from "./prompt";
 
 const baseQuestion: Question = {
   name: "test-question",
@@ -8,6 +13,7 @@ const baseQuestion: Question = {
   intent: "Build a landing page for a coffee shop.",
   hasSpec: false,
   hasTickets: false,
+  tickets: [],
 };
 
 describe("buildPrompt", () => {
@@ -86,5 +92,95 @@ describe("buildPrompt", () => {
     const prompt = buildPrompt(baseQuestion);
     const lastSection = prompt.split("---").pop()!;
     expect(lastSection).toContain(ARTIFACT_CONTRACT);
+  });
+});
+
+describe("buildTicketPrompt", () => {
+  const ticket: Ticket = { index: 2, title: "Start menu + score system" };
+
+  it("scopes the work to exactly one ticket with index, total, and title", () => {
+    const prompt = buildTicketPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("./tickets.md");
+    expect(prompt).toContain("ticket 2 of 3");
+    expect(prompt).toContain("`Start menu + score system`");
+    expect(prompt).toContain("ONLY");
+  });
+
+  it("points at tickets.md without inlining the ticket body", () => {
+    const question: Question = {
+      ...baseQuestion,
+      hasTickets: true,
+      tickets: [
+        { index: 1, title: "Minimal playable snake" },
+        ticket,
+      ],
+    };
+    const prompt = buildTicketPrompt(question, ticket, 2);
+    expect(prompt).toContain("read that file");
+    expect(prompt).not.toContain("Minimal playable snake");
+  });
+
+  it("adds progress context for tickets after the first", () => {
+    const prompt = buildTicketPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("previous tickets");
+    expect(prompt).toContain("do not start over");
+  });
+
+  it("omits progress context for the first ticket", () => {
+    const prompt = buildTicketPrompt(baseQuestion, { index: 1, title: "First" }, 3);
+    expect(prompt).not.toContain("previous tickets");
+  });
+
+  it("asks the model to mark the ticket done in tickets.md", () => {
+    const prompt = buildTicketPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("`[x]`");
+  });
+
+  it("keeps intent, rules, and the artifact contract", () => {
+    const prompt = buildTicketPrompt(baseQuestion, ticket, 3, "Global test rule.");
+    expect(prompt).toContain("Build a landing page for a coffee shop.");
+    expect(prompt).toContain("Global test rule.");
+    const lastPart = prompt.split("---").pop()!;
+    expect(lastPart).toContain(ARTIFACT_CONTRACT);
+  });
+});
+
+describe("buildEvaluationPrompt", () => {
+  const ticket: Ticket = { index: 1, title: "Minimal playable snake" };
+
+  it("identifies the ticket under evaluation", () => {
+    const prompt = buildEvaluationPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("ticket 1 of 3");
+    expect(prompt).toContain("`Minimal playable snake`");
+    expect(prompt).toContain("./tickets.md");
+  });
+
+  it("demands read-only inspection", () => {
+    const prompt = buildEvaluationPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("READ-ONLY");
+    expect(prompt).toContain("do NOT create, modify, or delete any file");
+  });
+
+  it("requires the verdict marker", () => {
+    const prompt = buildEvaluationPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("<verdict>COMPLETE</verdict>");
+    expect(prompt).toContain("<verdict>INCOMPLETE</verdict>");
+  });
+
+  it("warns against trusting self-reported marks", () => {
+    const prompt = buildEvaluationPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("do not trust");
+  });
+
+  it("points at spec.md when present", () => {
+    const question: Question = { ...baseQuestion, hasSpec: true };
+    const prompt = buildEvaluationPrompt(question, ticket, 3);
+    expect(prompt).toContain("./spec.md");
+  });
+
+  it("anchors the evaluator to the current working directory", () => {
+    const prompt = buildEvaluationPrompt(baseQuestion, ticket, 3);
+    expect(prompt).toContain("THIS directory");
+    expect(prompt).toContain("Do NOT look for files anywhere else");
   });
 });
