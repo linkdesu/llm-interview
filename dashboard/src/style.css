@@ -16,6 +16,10 @@
   --accent-soft: rgba(37, 99, 235, 0.08);
   --ok: #1a7f37;
   --warn: #b42318;
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.06);
+  --notice: #c2410c;
+  --notice-soft: rgba(194, 65, 12, 0.06);
   --font-sans:
     'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -33,6 +37,10 @@
   --accent-soft: rgba(59, 130, 246, 0.16);
   --ok: #4ade80;
   --warn: #f87171;
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --notice: #fb923c;
+  --notice-soft: rgba(251, 146, 60, 0.12);
 }
 
 * {
@@ -488,6 +496,51 @@ a {
   padding: 6px;
   border-radius: 2px;
   background: var(--bg-subtle);
+}
+
+/* Failed tool results (#9): thin red left border, tinted body, red summary. */
+.tool-result-error {
+  padding-left: 8px;
+  border-left: 2px solid var(--danger);
+}
+
+.tool-result-error summary {
+  color: var(--danger);
+}
+
+.tool-result-error .message-text {
+  background: var(--danger-soft);
+}
+
+/* Non-message session lines (#10): orange system-event highlight. */
+.event-item {
+  padding-left: 8px;
+  border-left: 2px solid var(--notice);
+}
+
+.event-item summary {
+  color: var(--notice);
+}
+
+.event-item .message-text {
+  background: var(--notice-soft);
+}
+
+.event-item-inline {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.event-item-inline .event-type {
+  color: var(--notice);
+}
+
+.event-item-inline .event-text {
+  color: var(--fg-secondary);
+  word-break: break-word;
 }
 
 .image-placeholder {

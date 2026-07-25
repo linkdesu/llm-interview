@@ -1,6 +1,7 @@
 // Parser for pi session transcripts (session.jsonl).
-// One JSON object per line; only `message` lines become timeline items,
-// other line types (session header, model_change, ...) are skipped.
+// One JSON object per line; `message` lines become conversation items and
+// every other parsed line (session header, model_change, compaction, ...)
+// becomes a generic `event` item, so nothing in the file is dropped.
 
 export interface TextPart {
   type: 'text'
@@ -47,9 +48,19 @@ export interface ToolResultItem {
   toolName?: string
   toolCallId?: string
   text: string
+  isError?: boolean
 }
 
-export type TranscriptItem = UserItem | AssistantItem | ToolResultItem
+/** Non-message line (session header, model_change, compaction, ...) shown as a system event. */
+export interface EventItem {
+  kind: 'event'
+  id?: string
+  timestamp?: string
+  eventType: string
+  text: string
+}
+
+export type TranscriptItem = UserItem | AssistantItem | ToolResultItem | EventItem
 
 interface RawContentPart {
   type?: string
@@ -65,6 +76,7 @@ interface RawMessage {
   content?: RawContentPart[]
   toolCallId?: string
   toolName?: string
+  isError?: boolean
 }
 
 interface RawLine {
@@ -72,6 +84,12 @@ interface RawLine {
   id?: string
   timestamp?: string
   message?: RawMessage
+  // Fields used to build human-readable payloads for known event types.
+  summary?: string
+  provider?: string
+  modelId?: string
+  thinkingLevel?: string
+  version?: number
 }
 
 /** Join the text parts of a message content array, ignoring other part types. */
@@ -107,9 +125,31 @@ function parseAssistantParts(content: RawContentPart[] | undefined): AssistantPa
   return parts
 }
 
+/** Human-readable payload for a non-message line; compact JSON fallback for unknown types. */
+function describeEvent(raw: RawLine): string {
+  switch (raw.type) {
+    case 'compaction':
+      if (typeof raw.summary === 'string') return raw.summary
+      break
+    case 'model_change':
+      return [raw.provider, raw.modelId].filter((v) => typeof v === 'string').join(' / ')
+    case 'thinking_level_change':
+      if (typeof raw.thinkingLevel === 'string') return `thinking level: ${raw.thinkingLevel}`
+      break
+    case 'session':
+      return typeof raw.version === 'number' ? `session (format v${raw.version})` : 'session'
+  }
+  const rest = { ...(raw as Record<string, unknown>) }
+  delete rest.type
+  delete rest.id
+  delete rest.timestamp
+  return JSON.stringify(rest)
+}
+
 /**
  * Parse a session.jsonl transcript into a message timeline.
- * Tolerant of malformed lines and unknown line/message/part types: they are skipped.
+ * Malformed lines are skipped; unknown message roles are skipped;
+ * every other parsed line becomes an `event` item.
  */
 export function parseTranscript(jsonl: string): TranscriptItem[] {
   const items: TranscriptItem[] = []
@@ -122,7 +162,18 @@ export function parseTranscript(jsonl: string): TranscriptItem[] {
     } catch {
       continue
     }
-    if (raw?.type !== 'message' || !raw.message) continue
+    if (raw?.type !== 'message' || !raw.message) {
+      if (typeof raw?.type === 'string') {
+        items.push({
+          kind: 'event',
+          id: raw.id,
+          timestamp: raw.timestamp,
+          eventType: raw.type,
+          text: describeEvent(raw),
+        })
+      }
+      continue
+    }
     const { id, timestamp, message } = raw
     switch (message.role) {
       case 'user':
@@ -139,6 +190,7 @@ export function parseTranscript(jsonl: string): TranscriptItem[] {
           toolName: message.toolName,
           toolCallId: message.toolCallId,
           text: collectText(message.content),
+          isError: message.isError === true,
         })
         break
       // Unknown roles are skipped.
