@@ -572,7 +572,12 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
             }
 
             if (verdict !== "complete") {
-              progress(`  ✗ ticket ${step.ticket.index} judged incomplete — aborting run`);
+              // Distinguish an explicit INCOMPLETE from a missing/unparseable
+              // verdict marker — the log must not misattribute the cause.
+              const reason = verdict === null
+                ? "no verdict marker found in evaluation (treated as INCOMPLETE)"
+                : "judged INCOMPLETE by evaluation";
+              progress(`  ✗ ticket ${step.ticket.index}: ${reason} — aborting run`);
               status = "error";
               break;
             }
