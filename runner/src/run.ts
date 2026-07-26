@@ -23,6 +23,7 @@ import {
   runInvocation,
   sessionHasWriteToolErrors,
   parseVerdict,
+  assertModelsAvailable,
   type PiEnvironment,
 } from "./pi-runner";
 
@@ -395,6 +396,10 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   if (filteredModels.length !== models.length || filteredQuestions.length !== questions.length) {
     log(`filtered to ${filteredModels.length} models × ${filteredQuestions.length} questions = ${filteredModels.length * filteredQuestions.length} combos`);
   }
+
+  // Fail fast on model id typos: pi runs unknown ids as "custom models"
+  // instead of erroring, which would silently burn the whole matrix.
+  await assertModelsAvailable(piHome, filteredModels);
 
   // Pre-compute the full combo list for progress tracking
   type ComboPlan = { model: typeof filteredModels[number]; question: typeof filteredQuestions[number]; comboId: string };

@@ -467,7 +467,11 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   // Collect all output (stdout + stderr) into chunks for the log file
   const chunks: Buffer[] = [];
 
-  // Prefix pi stderr lines with [pi>error] for visibility
+  // Prefix pi stderr lines with [pi>error] for visibility. Expected noise is
+  // suppressed: the runner always passes a fresh --session-id per invocation
+  // by design, so pi's "no session found, creating a new one" warning fires
+  // on every single invocation and means nothing. The raw line still lands
+  // in the output log via `chunks` above.
   let stderrBuffer = "";
   child.stderr.on("data", (d: Buffer) => {
     chunks.push(d);
@@ -475,7 +479,9 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     const lines = stderrBuffer.split("\n");
     stderrBuffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (line.trim().length === 0) continue;
+      const trimmed = line.trim();
+      if (trimmed.length === 0) continue;
+      if (/^Warning: No project session found with id '.*'; creating a new session with that id\.?$/.test(trimmed)) continue;
       process.stderr.write(`[pi>error] ${line}\n`);
     }
   });
@@ -590,6 +596,52 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     stdoutFile,
     apiError,
   };
+}
+
+/**
+ * Validate that every given model id exists in pi's models.json
+ * (<piHome>/models.json) before any invocation runs. pi treats an unknown
+ * model id as a "custom model" and runs it anyway — a typo in config.toml
+ * would silently burn the whole matrix on a model that does not exist, so
+ * the runner refuses to start instead.
+ *
+ * Validation is skipped when models.json is missing or unparseable (pi may
+ * rely on built-in providers only; pi will report its own error), and for
+ * providers not declared in models.json (built-in providers cannot be
+ * validated offline).
+ *
+ * @throws Error listing the unknown ids and the available ids per provider.
+ */
+export async function assertModelsAvailable(
+  piHome: string,
+  models: Array<{ provider: string; modelId: string }>
+): Promise<void> {
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(await readFile(join(piHome, "models.json"), "utf-8"));
+  } catch {
+    return; // no readable custom provider config — nothing to validate against
+  }
+  const providers = (data.providers ?? {}) as Record<string, unknown>;
+
+  const problems: string[] = [];
+  for (const m of models) {
+    const entry = providers[m.provider] as Record<string, unknown> | undefined;
+    if (!entry || !Array.isArray(entry.models)) continue; // built-in provider
+    const ids = (entry.models as Array<Record<string, unknown>>).map((x) =>
+      String(x.id ?? "")
+    );
+    if (!ids.includes(m.modelId)) {
+      problems.push(
+        `  model "${m.modelId}" not found for provider "${m.provider}". Available: ${ids.join(", ")}`
+      );
+    }
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      `Unknown model id(s) — fix config.toml before running:\n${problems.join("\n")}`
+    );
+  }
 }
 
 /**

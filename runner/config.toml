@@ -35,7 +35,7 @@ spec_draft_n_max = 2
 [[models]]
 name = "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M"
 provider = "llamacpp-local"
-modelId = "qwopus-35b-a3b-q5"
+modelId = "qwopus3.6-35b-a3b-q5"
 max_turns = 200
 notes = ""
 [models.params]

@@ -546,6 +546,44 @@ describe("runMatrix", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Test 8b: Model id typo aborts before any combo runs
+  // -----------------------------------------------------------------------
+  it("aborts before running when a model id is missing from pi's models.json", async () => {
+    const { runMatrix } = await import("./run");
+
+    // Declare the provider in pi's models.json but with different model ids
+    await mkdir(piHome, { recursive: true });
+    await writeFile(
+      join(piHome, "models.json"),
+      JSON.stringify({
+        providers: {
+          "llamacpp-local": {
+            models: [{ id: "alpha-v2.gguf" }, { id: "beta-v2.gguf" }],
+          },
+        },
+      }),
+      "utf-8"
+    );
+
+    await expect(
+      runMatrix({
+        questionDir,
+        configPath,
+        sessionRoot,
+        piBin: stubPiPath,
+        piHome,
+        tempRoot: runTempRoot,
+        piVersion: "test-1.0",
+        maxTurns: 100,
+        runRules: "",
+      })
+    ).rejects.toThrow(/alpha\.gguf.*Available:.*alpha-v2\.gguf/s);
+
+    // Nothing ran: no archives were produced
+    expect(await listDir(sessionRoot)).toHaveLength(0);
+  });
+
+  // -----------------------------------------------------------------------
   // Test 9: Isolation guard — run workdirs must live outside the repo
   // -----------------------------------------------------------------------
   it("rejects a tempRoot inside the repository", async () => {

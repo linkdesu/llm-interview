@@ -689,3 +689,74 @@ describe("runInvocation API failure detection", () => {
     expect(logContent).toContain('"tool_execution_update"');
   });
 });
+
+// ---------------------------------------------------------------------------
+// assertModelsAvailable: validate registry model ids against pi's models.json
+// ---------------------------------------------------------------------------
+
+describe("assertModelsAvailable", () => {
+  async function writeModelsJson(
+    piHome: string,
+    providers: Record<string, string[]>
+  ): Promise<void> {
+    await mkdir(piHome, { recursive: true });
+    const data = {
+      providers: Object.fromEntries(
+        Object.entries(providers).map(([name, ids]) => [
+          name,
+          { models: ids.map((id) => ({ id })) },
+        ])
+      ),
+    };
+    await writeFile(join(piHome, "models.json"), JSON.stringify(data), "utf-8");
+  }
+
+  it("accepts model ids declared in models.json", async () => {
+    const { assertModelsAvailable } = await import("./pi-runner");
+    const piHome = join(testRoot, "pi-home-ok");
+    await writeModelsJson(piHome, { "llamacpp-local": ["a.gguf", "b.gguf"] });
+
+    await expect(
+      assertModelsAvailable(piHome, [
+        { provider: "llamacpp-local", modelId: "a.gguf" },
+        { provider: "llamacpp-local", modelId: "b.gguf" },
+      ])
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects an unknown model id and lists the available ids", async () => {
+    const { assertModelsAvailable } = await import("./pi-runner");
+    const piHome = join(testRoot, "pi-home-typo");
+    await writeModelsJson(piHome, { "llamacpp-local": ["qwopus3.6-35b-a3b-q5"] });
+
+    await expect(
+      assertModelsAvailable(piHome, [
+        { provider: "llamacpp-local", modelId: "qwopus-35b-a3b-q5" },
+      ])
+    ).rejects.toThrow(/qwopus-35b-a3b-q5.*Available:.*qwopus3\.6-35b-a3b-q5/s);
+  });
+
+  it("skips validation when models.json is missing", async () => {
+    const { assertModelsAvailable } = await import("./pi-runner");
+    const piHome = join(testRoot, "pi-home-no-models-json");
+    await mkdir(piHome, { recursive: true });
+
+    await expect(
+      assertModelsAvailable(piHome, [
+        { provider: "llamacpp-local", modelId: "anything" },
+      ])
+    ).resolves.toBeUndefined();
+  });
+
+  it("skips providers not declared in models.json (built-in providers)", async () => {
+    const { assertModelsAvailable } = await import("./pi-runner");
+    const piHome = join(testRoot, "pi-home-builtin");
+    await writeModelsJson(piHome, { "llamacpp-local": ["a.gguf"] });
+
+    await expect(
+      assertModelsAvailable(piHome, [
+        { provider: "openai", modelId: "gpt-5" },
+      ])
+    ).resolves.toBeUndefined();
+  });
+});
