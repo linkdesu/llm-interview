@@ -82,6 +82,46 @@ function formatArgs(toolName: string, args: unknown): string {
   }
 }
 
+/**
+ * Shrink one stdout event line for the on-disk log. Streaming delta events
+ * (`message_update` with a `*_delta` assistant event) carry two cumulative
+ * snapshots — the top-level `message` and `assistantMessageEvent.partial` —
+ * which grow quadratically when a large write/edit argument streams in
+ * (observed: 181MB for one invocation, 99.9% of it these snapshots). Keep
+ * only the delta itself; the full message is available in `message_end`.
+ * `tool_execution_update.partialResult` is cumulative too, so it is dropped
+ * as well (the final result lands in `tool_execution_end`). All other lines
+ * pass through untouched.
+ */
+function filterLogLine(line: string): string {
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(line);
+  } catch {
+    return line;
+  }
+  if (event.type === "message_update") {
+    const ev = event.assistantMessageEvent as Record<string, unknown> | undefined;
+    if (ev && typeof ev.type === "string" && ev.type.endsWith("_delta")) {
+      return JSON.stringify({
+        type: "message_update",
+        assistantMessageEvent: {
+          type: ev.type,
+          contentIndex: ev.contentIndex,
+          delta: ev.delta,
+        },
+      });
+    }
+    return line;
+  }
+  if (event.type === "tool_execution_update") {
+    const rest = { ...event };
+    delete rest.partialResult;
+    return JSON.stringify(rest);
+  }
+  return line;
+}
+
 function renderJsonEvent(line: string): void {
   let event: Record<string, unknown>;
   try {
@@ -222,8 +262,17 @@ export interface PiEnvironment {
  * An isolated workdir prepared for a run's invocations.
  */
 export interface WorkdirSetup {
-  /** Absolute path to the isolated working directory. */
+  /** Root directory of this run (removed after archiving). */
+  runDir: string;
+  /** Absolute path to the agent's isolated working directory (pi's cwd). */
   workdir: string;
+  /**
+   * Absolute path to the runner's bookkeeping directory (pi's --session-dir
+   * and output logs). Kept OUTSIDE the agent's cwd: real runs showed agents
+   * "cleaning up" *.jsonl/*.log files from their workdir so it matches the
+   * three-file artifact contract — deleting the runner's transcripts.
+   */
+  sessionDir: string;
   /** Extra pi arguments prepared during setup (e.g. --skill). */
   extraArgs: string[];
 }
@@ -237,11 +286,14 @@ export async function setupWorkdir(
   question: Question,
   tempRoot: string
 ): Promise<WorkdirSetup> {
-  const workdir = join(
+  const runDir = join(
     resolve(tempRoot),
     `pi-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
+  const workdir = join(runDir, "work");
+  const sessionDir = join(runDir, "sessions");
   await mkdir(workdir, { recursive: true });
+  await mkdir(sessionDir, { recursive: true });
   log(`created workdir: ${workdir}`);
 
   // Copy question files into the workdir if they exist
@@ -274,7 +326,7 @@ export async function setupWorkdir(
     log(`chrome-devtools-axi skill not available, skipping`);
   }
 
-  return { workdir, extraArgs };
+  return { runDir, workdir, sessionDir, extraArgs };
 }
 
 /**
@@ -283,8 +335,13 @@ export async function setupWorkdir(
 export interface InvocationOptions {
   /** The prompt to give to the agent. */
   prompt: string;
-  /** The prepared isolated working directory (pi's cwd and session dir). */
+  /** The prepared isolated working directory (pi's cwd). */
   workdir: string;
+  /**
+   * Directory for pi's --session-dir and the captured output log. Outside
+   * the agent's cwd so the agent cannot delete the runner's transcripts.
+   */
+  sessionDir: string;
   /**
    * Unique session id for this invocation (e.g. "session", "t1", "t1-eval").
    * The produced JSONL is normalized to <sessionId>.jsonl in the workdir.
@@ -335,7 +392,7 @@ export interface InvocationResult {
  * Run one pi invocation in an already-prepared workdir:
  *
  * - Spawns piBin with the given prompt, model arguments, and --session-id.
- * - Captures stdout+stderr to pi-output-<sessionId>.log in the workdir.
+ * - Captures stdout+stderr to pi-output-<sessionId>.log in the session dir.
  * - Kills the process if it exceeds maxTurns.
  * - Renames the invocation's new session JSONL file to <sessionId>.jsonl.
  */
@@ -352,6 +409,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   const {
     prompt,
     workdir,
+    sessionDir,
     sessionId,
     extraArgs,
     provider,
@@ -363,11 +421,11 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   // Snapshot existing session files so we can tell which one this
   // invocation produced.
   const beforeJsonl = new Set(
-    (await readdir(workdir)).filter((f) => f.endsWith(".jsonl"))
+    (await readdir(sessionDir)).filter((f) => f.endsWith(".jsonl"))
   );
 
   // Path for capturing stdout+stderr
-  const stdoutFile = join(workdir, `pi-output-${sessionId}.log`);
+  const stdoutFile = join(sessionDir, `pi-output-${sessionId}.log`);
 
   // Build the pi command arguments
   const args: string[] = [
@@ -383,7 +441,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     `--model`,
     `${provider}/${modelId}`,
     `--session-dir`,
-    workdir,
+    sessionDir,
     `--session-id`,
     sessionId,
     prompt,
@@ -422,16 +480,18 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     }
   });
 
-  // Parse JSONL events from stdout and render human-readable text
+  // Parse JSONL events from stdout and render human-readable text. The log
+  // file gets a filtered copy: streaming deltas carry cumulative snapshots
+  // that bloat the log quadratically (see filterLogLine).
   let lineBuffer = "";
   child.stdout.on("data", (d: Buffer) => {
-    chunks.push(d);
     lineBuffer += d.toString("utf-8");
     const lines = lineBuffer.split("\n");
     // Keep the last (potentially partial) line in the buffer
     lineBuffer = lines.pop() ?? "";
     for (const line of lines) {
       if (line.trim().length === 0) continue;
+      chunks.push(Buffer.from(filterLogLine(line) + "\n"));
       renderJsonEvent(line);
       if (maxTurnsExceeded && !killedForMaxTurns) {
         log(`max turns exceeded (${turnCount}), killing process`);
@@ -467,14 +527,18 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     log(`exited with code ${exitCode} (${elapsed}s)`);
   }
 
-  // Write collected output to the log file
+  // Write collected output to the log file (flushing any unterminated
+  // trailing line from stdout first)
+  if (lineBuffer.trim().length > 0) {
+    chunks.push(Buffer.from(filterLogLine(lineBuffer) + "\n"));
+  }
   await writeFile(stdoutFile, Buffer.concat(chunks));
   log(`wrote output log: ${stdoutFile}`);
 
   // Find the session JSONL this invocation produced and normalize its name
   let sessionFile: string | null = null;
   try {
-    const entries = await readdir(workdir);
+    const entries = await readdir(sessionDir);
     const newJsonl = entries.filter(
       (f) => f.endsWith(".jsonl") && !beforeJsonl.has(f)
     );
@@ -485,14 +549,14 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
       let newest = newJsonl[0];
       let newestMtime = 0;
       for (const f of newJsonl) {
-        const mtime = (await stat(join(workdir, f))).mtimeMs;
+        const mtime = (await stat(join(sessionDir, f))).mtimeMs;
         if (mtime >= newestMtime) {
           newest = f;
           newestMtime = mtime;
         }
       }
-      const srcPath = join(workdir, newest);
-      const dstPath = join(workdir, `${sessionId}.jsonl`);
+      const srcPath = join(sessionDir, newest);
+      const dstPath = join(sessionDir, `${sessionId}.jsonl`);
       // Only rename if it's not already named <sessionId>.jsonl
       if (newest !== `${sessionId}.jsonl`) {
         await rename(srcPath, dstPath);
@@ -501,7 +565,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
       sessionFile = dstPath;
       log(`found session file: ${sessionFile}`);
     } else {
-      log(`no new .jsonl files found in workdir`);
+      log(`no new .jsonl files found in session dir`);
     }
   } catch (err) {
     log(`error finding session file: ${err}`);

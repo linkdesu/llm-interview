@@ -92,8 +92,18 @@ async function createStubPi(
 ORDER_LOG="${orderLogPath}"
 echo "$(pwd)" >> "$ORDER_LOG"
 
+# Parse --session-dir (real pi writes its session JSONL there)
+SESSION_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+
 # Create fake session.jsonl
-echo '{"role":"user","content":"test"}' > session.jsonl
+echo '{"role":"user","content":"test"}' > "$SESSION_DIR/session.jsonl"
 
 # Create expected artifacts
 echo '<!DOCTYPE html><html></html>' > index.html
@@ -658,11 +668,20 @@ exit 0
     const { runMatrix } = await import("./run");
 
     // Stub that writes a session.jsonl containing an image content item
+    // into --session-dir (like real pi)
     const imageStub = join(tempRoot, "stub-pi-image");
     await writeFile(
       imageStub,
       `#!/usr/bin/env bash
-cat > session.jsonl <<'JSONL'
+SESSION_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+cat > "$SESSION_DIR/session.jsonl" <<'JSONL'
 {"type":"message","message":{"role":"user","content":[{"type":"text","text":"look at this"},{"type":"image","data":"iVBORw0KGgoAAAANSUhEUg","mimeType":"image/png"}]}}
 JSONL
 echo '<!DOCTYPE html><html></html>' > index.html
@@ -848,27 +867,45 @@ async function writeTicketedFixtures(
 
 /**
  * A stub pi that distinguishes invocations via a counter file in cwd and
- * emits a session.jsonl per invocation according to the given script map
- * (1-based invocation number → session.jsonl content). Always writes the
- * three artifact files and exits 0. Cleans up its counter on the last call.
+ * emits a session.jsonl per invocation into --session-dir (like real pi)
+ * according to the given script map (1-based invocation number →
+ * session.jsonl content). Always writes the three artifact files and
+ * exits 0. Cleans up its counter on the last call.
+ *
+ * When cleanWorkdir is set, each invocation first deletes any *.jsonl and
+ * pi-output-*.log in its cwd — simulating an agent that "cleans up" the
+ * working directory to satisfy the artifact contract.
  */
 async function createScriptedStubPi(
   stubPath: string,
-  sessionByCall: Record<number, string>
+  sessionByCall: Record<number, string>,
+  options: { cleanWorkdir?: boolean } = {}
 ) {
   const lastCall = Math.max(...Object.keys(sessionByCall).map(Number));
   const cases = Object.entries(sessionByCall)
     .map(([n, content]) => `  ${n}) SESSION='${content}' ;;`)
     .join("\n");
+  const cleanup = options.cleanWorkdir
+    ? 'rm -f ./*.jsonl ./pi-output-*.log 2>/dev/null || true'
+    : "";
   const script = `#!/usr/bin/env bash
 COUNT=$(cat .stub-count 2>/dev/null || echo 0)
 COUNT=$((COUNT+1))
 echo "$COUNT" > .stub-count
+SESSION_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+${cleanup}
 SESSION='{}'
 case "$COUNT" in
 ${cases}
 esac
-echo "$SESSION" > session.jsonl
+echo "$SESSION" > "$SESSION_DIR/session.jsonl"
 echo '<!DOCTYPE html><html></html>' > index.html
 echo 'body {}' > style.css
 echo 'console.log("hi");' > script.js
@@ -1195,6 +1232,43 @@ describe("runMatrix per-ticket flow", () => {
     const runJson = await readArchivedRunJson(sessionRoot);
     // Single-invocation flow: no invocations array, no evaluation
     expect(runJson.invocations).toBeUndefined();
+  });
+
+  it("survives the agent deleting transcript-like files from its workdir", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-agent-cleanup");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 2);
+
+    // Real-run behavior (Qwopus, 2026-07-25): the agent "cleans up" *.jsonl
+    // and pi-output-*.log from its cwd so the directory matches the
+    // three-file artifact contract — deleting the runner's transcripts.
+    // Transcripts must live outside the agent's workdir so archiving
+    // still succeeds.
+    const stub = join(tempRoot, "stub-agent-cleanup");
+    await createScriptedStubPi(
+      stub,
+      { 1: CLEAN_SESSION, 2: CLEAN_SESSION },
+      { cleanWorkdir: true }
+    );
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results[0].status).toBe("ok");
+
+    // Both invocations' transcripts survived and were archived
+    const session = await readArchivedSession(sessionRoot);
+    expect(session.trim().split("\n")).toHaveLength(2);
   });
 });
 

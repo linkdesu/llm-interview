@@ -211,6 +211,7 @@ describe("runInvocation", () => {
     const result = await runInvocation({
       prompt: "Hello agent",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -250,6 +251,7 @@ describe("runInvocation", () => {
     const first = await runInvocation({
       prompt: "Ticket one",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -261,6 +263,7 @@ describe("runInvocation", () => {
     const second = await runInvocation({
       prompt: "Ticket two",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t2",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -289,6 +292,7 @@ describe("runInvocation", () => {
     const result = await runInvocation({
       prompt: "Fail me",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -313,6 +317,7 @@ describe("runInvocation", () => {
     const result = await runInvocation({
       prompt: "Output something",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -346,6 +351,7 @@ describe("runInvocation", () => {
     const result = await runInvocation({
       prompt: "No session",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -545,6 +551,7 @@ describe("runInvocation API failure detection", () => {
     const result = await runInvocation({
       prompt: "Hello agent",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -594,6 +601,7 @@ describe("runInvocation API failure detection", () => {
     const result = await runInvocation({
       prompt: "Hello agent",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -619,6 +627,7 @@ describe("runInvocation API failure detection", () => {
     const result = await runInvocation({
       prompt: "Hello agent",
       workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
       sessionId: "t1",
       extraArgs: setup.extraArgs,
       provider: "llamacpp-local",
@@ -629,5 +638,54 @@ describe("runInvocation API failure detection", () => {
     });
 
     expect(result.apiError).toBeNull();
+  });
+
+  it("strips cumulative snapshots from the output log but keeps the deltas", async () => {
+    // Stub pi emitting a streaming delta with big cumulative snapshots
+    // (`message` / `partial`), a tool_execution_update with a cumulative
+    // partialResult, and a complete message_end.
+    const stubBloat = join(stubBinDir, "pi-bloat");
+    await writeFile(
+      stubBloat,
+      [
+        "#!/bin/sh",
+        'echo "{\\"type\\":\\"message_update\\",\\"message\\":{\\"note\\":\\"MARKER_MSG_SNAPSHOT\\"},\\"assistantMessageEvent\\":{\\"type\\":\\"toolcall_delta\\",\\"contentIndex\\":1,\\"delta\\":\\"CHUNK\\",\\"partial\\":{\\"note\\":\\"MARKER_PARTIAL_SNAPSHOT\\"}}}"',
+        'echo "{\\"type\\":\\"tool_execution_update\\",\\"toolCallId\\":\\"c1\\",\\"toolName\\":\\"bash\\",\\"args\\":{},\\"partialResult\\":{\\"note\\":\\"MARKER_PARTIAL_RESULT\\"}}"',
+        'echo "{\\"type\\":\\"message_end\\",\\"message\\":{\\"role\\":\\"assistant\\",\\"content\\":[{\\"type\\":\\"text\\",\\"text\\":\\"MARKER_FINAL\\"}]}}"',
+        "exit 0",
+      ].join("\n")
+    );
+    await Bun.$`chmod +x ${stubBloat}`;
+
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-bloat");
+    await setupQuestionDir(dir, {});
+
+    const tempRoot = join(testRoot, "tmp-inv-bloat");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const result = await runInvocation({
+      prompt: "Bloat me",
+      workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stubBloat,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+    });
+
+    const logContent = await readFile(result.stdoutFile, "utf-8");
+    // Cumulative snapshots are gone from the log
+    expect(logContent).not.toContain("MARKER_MSG_SNAPSHOT");
+    expect(logContent).not.toContain("MARKER_PARTIAL_SNAPSHOT");
+    expect(logContent).not.toContain("MARKER_PARTIAL_RESULT");
+    // The delta itself and complete events survive
+    expect(logContent).toContain("CHUNK");
+    expect(logContent).toContain("MARKER_FINAL");
+    expect(logContent).toContain('"tool_execution_update"');
   });
 });

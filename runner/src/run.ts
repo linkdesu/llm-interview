@@ -461,6 +461,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           const res = await runInvocation({
             prompt: step.prompt,
             workdir: setup.workdir,
+            sessionDir: setup.sessionDir,
             sessionId: step.sessionId,
             extraArgs: setup.extraArgs,
             provider: model.provider,
@@ -514,6 +515,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
             const evalRes = await runInvocation({
               prompt: buildEvaluationPrompt(question, step.ticket, plan.length),
               workdir: setup.workdir,
+              sessionDir: setup.sessionDir,
               sessionId: `${step.sessionId}-eval`,
               extraArgs: setup.extraArgs,
               provider: model.provider,
@@ -643,9 +645,9 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         );
         log(`wrote run.json to archive`);
 
-        // Delete the isolated workdir after archiving
-        await rm(setup.workdir, { recursive: true, force: true });
-        log(`deleted workdir`);
+        // Delete the isolated run directory (workdir + session dir) after archiving
+        await rm(setup.runDir, { recursive: true, force: true });
+        log(`deleted run dir`);
 
         outcomes.push({
           question,
