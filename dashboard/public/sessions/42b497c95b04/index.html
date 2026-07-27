@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>City Time Machine — A Cozy Diorama</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="canvas-container"></div>
+  
+  <div id="ui-overlay">
+    <div id="title-bar">
+      <h1>City Time Machine</h1>
+      <p class="subtitle">A cozy miniature world — orbit and zoom to explore</p>
+    </div>
+    <div id="controls">
+      <button id="btn-music" title="Toggle lo-fi music">🎵 Music</button>
+      <button id="btn-time" title="Toggle day/night cycle">🌙 Night</button>
+      <button id="btn-reset" title="Reset camera">⟳ Reset</button>
+    </div>
+  </div>
+
+  <!-- Audio elements for lo-fi music -->
+  <audio id="bg-music" loop preload="auto">
+    <!-- Generated programmatically via Web Audio API -->
+  </audio>
+
+  <!-- Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  
+  <!-- Our scripts -->
+  <script src="script.js"></script>
+</body>
+</html>

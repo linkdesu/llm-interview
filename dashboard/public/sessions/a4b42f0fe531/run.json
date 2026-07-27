@@ -1,0 +1,153 @@
+{
+  "question": {
+    "name": "browser-os",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M",
+    "provider": "llamacpp-local",
+    "modelId": "qwopus3.6-35b-a3b-q5"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 1,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "a4b42f0fe531",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-07-26T17:15:10.243Z",
+  "endedAt": "2026-07-26T18:26:23.829Z",
+  "durationMs": 4273557,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 200,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 1370333
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 19051
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Wallpaper",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 105516
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Wallpaper",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 25306
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Calculator",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 535629
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Calculator",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 16982
+    },
+    {
+      "ticket": 4,
+      "ticketTitle": "Notepad",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 454025
+    },
+    {
+      "ticket": 4,
+      "ticketTitle": "Notepad",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 23082
+    },
+    {
+      "ticket": 5,
+      "ticketTitle": "Minesweeper",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 1310605
+    },
+    {
+      "ticket": 5,
+      "ticketTitle": "Minesweeper",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 32581
+    },
+    {
+      "ticket": 6,
+      "ticketTitle": "Spider Solitaire",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 338848
+    },
+    {
+      "ticket": 6,
+      "ticketTitle": "Spider Solitaire",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 41560
+    }
+  ]
+}

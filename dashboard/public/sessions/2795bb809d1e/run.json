@@ -1,0 +1,31 @@
+{
+  "question": {
+    "name": "city-time-machine",
+    "hasSpec": false,
+    "hasTickets": false
+  },
+  "model": {
+    "name": "Qwen3.6-27B-Fable-Fusion-711-MTP-Q5_K_M",
+    "provider": "llamacpp-local",
+    "modelId": "qwen3.6-27b-fable-fusion-q5"
+  },
+  "params": {
+    "thinking": "on",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "2795bb809d1e",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-07-26T10:39:57.963Z",
+  "endedAt": "2026-07-26T11:14:50.289Z",
+  "durationMs": 2092311,
+  "status": "error",
+  "exitCode": null,
+  "maxTurnsExceeded": true,
+  "maxTurns": 100,
+  "contractViolations": []
+}

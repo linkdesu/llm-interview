@@ -1,0 +1,82 @@
+{
+  "question": {
+    "name": "snake",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M",
+    "provider": "llamacpp-local",
+    "modelId": "qwopus3.6-35b-a3b-q5"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 1,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "e1cd5a5fed98",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-07-27T07:44:28.869Z",
+  "endedAt": "2026-07-27T08:08:01.573Z",
+  "durationMs": 1412694,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 200,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 222757
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 13910
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 639630
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 16459
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 519927
+    }
+  ]
+}

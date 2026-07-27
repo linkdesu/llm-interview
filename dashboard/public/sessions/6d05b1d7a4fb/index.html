@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>City Time Machine — Cozy Diorama</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Loading overlay -->
+  <div id="loader" class="overlay">
+    <div class="loader-inner">
+      <h2>City Time Machine</h2>
+      <p class="subtitle">Loading your cozy miniature world…</p>
+      <div class="loader-bar"><div class="loader-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Title / intro overlay -->
+  <div id="title-overlay" class="overlay hidden">
+    <div class="title-inner">
+      <h1>City Time Machine</h1>
+      <p class="tagline">A cozy miniature world, just for you</p>
+      <button id="start-btn">Enter the Diorama</button>
+    </div>
+  </div>
+
+  <!-- Instructions HUD -->
+  <div id="hud" class="hud hidden">
+    <div class="hud-top">
+      <span class="hud-title">City Time Machine</span>
+      <span class="hud-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</span>
+    </div>
+  </div>
+
+  <!-- Time-of-day slider -->
+  <div id="time-control" class="time-control hidden">
+    <label for="time-slider">Time of Day</label>
+    <input type="range" id="time-slider" min="0" max="100" value="50" />
+    <span id="time-label">Morning</span>
+  </div>
+
+  <!-- Audio toggle -->
+  <div id="audio-toggle" class="audio-toggle hidden">
+    <button id="audio-btn" title="Toggle lo-fi soundtrack">🎵 Sound</button>
+  </div>
+
+  <!-- Three.js + OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

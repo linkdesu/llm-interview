@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>City Time Machine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Timeline Slider -->
+    <div id="timeline-container">
+      <div id="timeline-label">Time Travel</div>
+      <div id="timeline-track">
+        <div id="timeline-progress"></div>
+        <div id="timeline-handle"></div>
+        <div class="year-label" data-year="1965">1965</div>
+        <div class="year-label" data-year="2005">2005</div>
+        <div class="year-label" data-year="2025">2025</div>
+        <div class="year-label" data-year="2055">2055</div>
+      </div>
+      <div id="current-year-display">1965</div>
+    </div>
+
+    <!-- Audio Controls -->
+    <div id="audio-controls">
+      <button id="audio-toggle" aria-label="Toggle music">
+        <span class="icon">♪</span>
+        <span class="label">Lo-Fi Beats</span>
+      </button>
+    </div>
+
+    <!-- Info Panel -->
+    <div id="info-panel">
+      <div id="era-title">Cozy Corner, 1965</div>
+      <div id="era-description">A nostalgic neighborhood with vintage charm and warm storefronts.</div>
+    </div>
+
+    <!-- Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <div class="loader">
+        <div class="spinner"></div>
+        <p>Building your city...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js and dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

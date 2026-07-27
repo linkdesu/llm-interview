@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Start Menu -->
+  <div id="startMenu" class="menu-overlay">
+    <div class="menu-box">
+      <h1 class="game-title">SNAKE</h1>
+
+      <div class="menu-section">
+        <label for="boardSizeInput">Board Size</label>
+        <input
+          type="number"
+          id="boardSizeInput"
+          value="20"
+          min="10"
+          max="99"
+        />
+        <span class="input-hint">10–99</span>
+      </div>
+
+      <div class="menu-section">
+        <span class="high-score-label">High Score</span>
+        <span id="menuHighScore" class="high-score-value">0</span>
+      </div>
+
+      <button id="startGameBtn" class="btn-primary">Start Game</button>
+    </div>
+  </div>
+
+  <!-- Ready Overlay (shown after Start Game is pressed) -->
+  <div id="readyOverlay" class="overlay hidden">
+    <p class="overlay-text">Press any key to start</p>
+  </div>
+
+  <!-- Gameplay Score Display -->
+  <div id="gameHUD" class="game-hud hidden">
+    <span id="gameScore" class="hud-score">Score: 0</span>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Game Over Overlay -->
+  <div id="gameOver" class="overlay hidden">
+    <div class="gameover-box">
+      <h1>Game Over</h1>
+      <p>Score: <span id="finalScore">0</span></p>
+      <p>High Score: <span id="finalHighScore">0</span></p>
+      <button id="playAgainBtn" class="btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

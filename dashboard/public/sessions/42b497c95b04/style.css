@@ -1,0 +1,100 @@
+/* =============================================
+   City Time Machine — Stylesheet
+   ============================================= */
+
+/* --- Reset & Base --- */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Georgia', serif;
+  background: #1a1423;
+  color: #e8dcc8;
+}
+
+/* --- Canvas Container --- */
+#canvas-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* --- UI Overlay --- */
+#ui-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* --- Title Bar --- */
+#title-bar {
+  text-align: center;
+  padding: 1.2em 1em 0.4em;
+  pointer-events: auto;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+}
+
+#title-bar h1 {
+  font-size: 1.6em;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: #f0e0c0;
+  margin-bottom: 0.15em;
+}
+
+#title-bar .subtitle {
+  font-size: 0.85em;
+  color: #c4a882;
+  font-style: italic;
+}
+
+/* --- Controls --- */
+#controls {
+  display: flex;
+  justify-content: center;
+  gap: 0.6em;
+  padding: 0.6em 1em 1em;
+  pointer-events: auto;
+}
+
+#controls button {
+  background: rgba(40, 30, 20, 0.75);
+  border: 1px solid rgba(200, 170, 130, 0.3);
+  color: #e8dcc8;
+  font-family: 'Georgia', serif;
+  font-size: 0.85em;
+  padding: 0.45em 1.1em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+#controls button:hover {
+  background: rgba(60, 45, 30, 0.85);
+  border-color: rgba(200, 170, 130, 0.6);
+  transform: translateY(-1px);
+}
+
+#controls button:active {
+  transform: translateY(0);
+}
+
+#controls button.active {
+  background: rgba(200, 170, 130, 0.35);
+  border-color: rgba(200, 170, 130, 0.7);
+  box-shadow: 0 0 8px rgba(200, 170, 130, 0.2);
+}

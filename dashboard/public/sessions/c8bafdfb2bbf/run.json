@@ -1,0 +1,31 @@
+{
+  "question": {
+    "name": "snake",
+    "hasSpec": false,
+    "hasTickets": false
+  },
+  "model": {
+    "name": "Qwen3.6-27B-Fable-Fusion-711-MTP-Q5_K_M",
+    "provider": "llamacpp-local",
+    "modelId": "qwen3.6-27b-fable-fusion-q5"
+  },
+  "params": {
+    "thinking": "on",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "c8bafdfb2bbf",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-07-26T04:42:20.334Z",
+  "endedAt": "2026-07-26T05:02:12.333Z",
+  "durationMs": 1191991,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 100,
+  "contractViolations": []
+}

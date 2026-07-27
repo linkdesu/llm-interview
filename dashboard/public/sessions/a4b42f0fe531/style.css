@@ -1,0 +1,1320 @@
+/* ============================================================
+   Browser OS — Stylesheet
+   Modern flat design (Windows 11 / macOS style)
+   ============================================================ */
+
+/* ---------- Reset ---------- */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  color: #1e1e1e;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ============================================================
+   Desktop
+   ============================================================ */
+#desktop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #3a6b8c;
+  transition: background 0.3s ease;
+}
+
+/* ---------- Wallpaper presets ---------- */
+/* 1. Default teal */
+.wallpaper-0 {
+  background: linear-gradient(135deg, #1a5276, #3a6b8c, #1a5276);
+}
+
+/* 2. Purple */
+.wallpaper-1 {
+  background: linear-gradient(135deg, #4a148c, #7b1fa2, #4a148c);
+}
+
+/* 3. Sunset orange */
+.wallpaper-2 {
+  background: linear-gradient(135deg, #bf360c, #e65100, #ff6e40);
+}
+
+/* 4. Forest green */
+.wallpaper-3 {
+  background: linear-gradient(135deg, #1b5e20, #388e3c, #1b5e20);
+}
+
+/* 5. Midnight blue */
+.wallpaper-4 {
+  background: linear-gradient(135deg, #0d1b2a, #1b263b, #0d1b2a);
+}
+
+/* 6. Rose */
+.wallpaper-5 {
+  background: linear-gradient(135deg, #880e4f, #c2185b, #880e4f);
+}
+
+/* 7. Light solid */
+.wallpaper-6 {
+  background: #e8e8e8;
+}
+
+/* 8. Dot pattern */
+.wallpaper-7 {
+  background: #263238;
+  background-image: radial-gradient(circle, #37474f 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* ============================================================
+   Desktop Icons
+   ============================================================ */
+#desktop-icons {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desktop-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 90px;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 8px 4px;
+  transition: background 0.15s ease;
+}
+
+.desktop-icon:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.desktop-icon:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.desktop-icon-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.desktop-icon-label {
+  font-size: 11px;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
+
+/* Icon colors */
+.desktop-icon[data-app="notepad"] .desktop-icon-icon {
+  background: #2196F3;
+}
+
+.desktop-icon[data-app="calculator"] .desktop-icon-icon {
+  background: #FF5722;
+}
+
+.desktop-icon[data-app="minesweeper"] .desktop-icon-icon {
+  background: #4CAF50;
+}
+
+.desktop-icon[data-app="spider"] .desktop-icon-icon {
+  background: #9C27B0;
+}
+
+/* ============================================================
+   Windows Container
+   ============================================================ */
+#windows-container {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ============================================================
+   Window
+   ============================================================ */
+.window {
+  position: absolute;
+  min-width: 320px;
+  min-height: 200px;
+  background: #f5f5f5;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  overflow: hidden;
+  transition: box-shadow 0.15s ease;
+}
+
+.window.focused {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- Title Bar ---------- */
+.window-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 0 12px;
+  background: #e8e8e8;
+  cursor: grab;
+  border-radius: 10px 10px 0 0;
+}
+
+.window.focused .window-titlebar {
+  background: #ffffff;
+}
+
+.window-titlebar.dragging {
+  cursor: grabbing;
+}
+
+.window-title-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e1e1e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.window-title-text .window-extra {
+  font-weight: 400;
+  color: #666;
+  margin-left: 4px;
+}
+
+/* ---------- Window Controls ---------- */
+.window-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.window-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #666;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.window-close-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.window.focused .window-close-btn {
+  color: #1e1e1e;
+}
+
+/* ---------- Resize Handle ---------- */
+.window-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+/* ---------- Window Content ---------- */
+.window-content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  font-size: 14px;
+  background: #ffffff;
+}
+
+/* ---------- Placeholder content ---------- */
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+  gap: 12px;
+}
+
+.placeholder-content .placeholder-icon {
+  font-size: 48px;
+  opacity: 0.5;
+}
+
+.placeholder-content .placeholder-text {
+  font-size: 16px;
+}
+
+/* ============================================================
+   Taskbar
+   ============================================================ */
+#taskbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: rgba(243, 243, 243, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  z-index: 100;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- Start Button ---------- */
+#taskbar-start {
+  width: 48px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 20px;
+  transition: background 0.15s ease;
+}
+
+#taskbar-start:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* ---------- Taskbar Apps ---------- */
+#taskbar-apps {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 0 8px;
+}
+
+.taskbar-btn {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1e1e1e;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.taskbar-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.taskbar-btn.active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.taskbar-btn.active::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0078d4;
+}
+
+.taskbar-btn-icon {
+  font-size: 14px;
+}
+
+/* ---------- Clock ---------- */
+#taskbar-clock {
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #1e1e1e;
+  min-width: 70px;
+  text-align: right;
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.15s ease;
+}
+
+#taskbar-clock:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* ============================================================
+   Context Menu
+   ============================================================ */
+.context-menu {
+  position: fixed;
+  min-width: 200px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  padding: 6px;
+  z-index: 1000;
+  display: none;
+}
+
+.context-menu.visible {
+  display: block;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s ease;
+}
+
+.context-menu-item:hover {
+  background: #f0f0f0;
+}
+
+.context-menu-item:active {
+  background: #e0e0e0;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 4px 8px;
+}
+
+/* ============================================================
+   Wallpaper Picker
+   ============================================================ */
+.wallpaper-picker {
+  position: fixed;
+  bottom: 56px;
+  right: 8px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  padding: 12px;
+  z-index: 1001;
+  display: none;
+}
+
+.wallpaper-picker.visible {
+  display: block;
+}
+
+.wallpaper-picker-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e1e1e;
+  margin-bottom: 10px;
+}
+
+.wallpaper-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.wallpaper-option {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.wallpaper-option:hover {
+  transform: scale(1.05);
+}
+
+.wallpaper-option.selected {
+  border-color: #0078d4;
+}
+
+/* ============================================================
+   Calculator
+   ============================================================ */
+
+#calculator-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  background: #f5f5f5;
+}
+
+.calculator-display {
+  background: #1e1e1e;
+  color: #ffffff;
+  font-size: 36px;
+  font-weight: 300;
+  text-align: right;
+  padding: 16px 20px;
+  min-height: 80px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  word-break: break-all;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.calculator-display .calc-expression {
+  font-size: 14px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.calculator-display .calc-current {
+  font-size: 36px;
+  transition: font-size 0.1s ease;
+}
+
+.calculator-display .calc-current.small {
+  font-size: 24px;
+}
+
+.calculator-display .calc-current.error {
+  color: #ff5252;
+  font-size: 28px;
+}
+
+.calculator-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  padding: 8px;
+  flex: 1;
+}
+
+.calc-btn {
+  border: none;
+  background: #e8e8e8;
+  border-radius: 8px;
+  font-size: 20px;
+  font-weight: 400;
+  color: #1e1e1e;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  transition: background 0.1s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.calc-btn:hover {
+  background: #d8d8d8;
+}
+
+.calc-btn:active {
+  background: #c8c8c8;
+}
+
+.calc-btn.operator {
+  background: #ff9800;
+  color: #ffffff;
+}
+
+.calc-btn.operator:hover {
+  background: #f57c00;
+}
+
+.calc-btn.operator:active {
+  background: #f57c00;
+}
+
+.calc-btn.operator.active {
+  background: #f57c00;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.calc-btn.equals {
+  background: #0078d4;
+  color: #ffffff;
+}
+
+.calc-btn.equals:hover {
+  background: #005a9e;
+}
+
+.calc-btn.equals:active {
+  background: #005a9e;
+}
+
+.calc-btn.function-btn {
+  background: #c8c8c8;
+  color: #1e1e1e;
+}
+
+.calc-btn.function-btn:hover {
+  background: #b8b8b8;
+}
+
+.calc-btn.function-btn:active {
+  background: #a8a8a8;
+}
+
+.calc-btn.clear {
+  background: #ff5252;
+  color: #ffffff;
+}
+
+.calc-btn.clear:hover {
+  background: #d32f2f;
+}
+
+.calc-btn.clear:active {
+  background: #d32f2f;
+}
+
+.calc-btn.zero {
+  grid-column: span 1;
+}
+
+/* ============================================================
+   Notepad
+   ============================================================ */
+#notepad-content {
+  display: flex;
+  height: 100%;
+  background: #ffffff;
+}
+
+/* Sidebar */
+.notepad-sidebar {
+  width: 180px;
+  min-width: 180px;
+  background: #f0f0f0;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+}
+
+.notepad-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #e8e8e8;
+}
+
+.notepad-sidebar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e1e1e;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notepad-sidebar-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.notepad-sidebar-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1e1e1e;
+}
+
+/* Document list */
+.notepad-doc-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.notepad-doc-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 3px solid transparent;
+}
+
+.notepad-doc-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.notepad-doc-item.active {
+  background: #e3f0ff;
+  border-left-color: #0078d4;
+  color: #1e1e1e;
+  font-weight: 500;
+}
+
+.notepad-doc-item .notepad-doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+/* Notepad actions bar */
+.notepad-actions {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 4px;
+  border-top: 1px solid #e0e0e0;
+  background: #e8e8e8;
+}
+
+.notepad-action-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  background: #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1e1e1e;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.1s ease;
+}
+
+.notepad-action-btn:hover {
+  background: #d0d0d0;
+}
+
+.notepad-action-btn:active {
+  background: #c0c0c0;
+}
+
+.notepad-action-btn.danger {
+  background: #ffe0e0;
+  color: #d32f2f;
+}
+
+.notepad-action-btn.danger:hover {
+  background: #ffcdd2;
+}
+
+/* Editor area */
+.notepad-editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.notepad-editor-header {
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #666;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fafafa;
+}
+
+.notepad-editor-header .notepad-doc-status {
+  font-style: italic;
+}
+
+.notepad-editor-header .notepad-doc-status.modified {
+  color: #f57c00;
+}
+
+.notepad-textarea {
+  flex: 1;
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 12px;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1e1e1e;
+  background: #ffffff;
+  tab-size: 4;
+}
+
+.notepad-textarea::placeholder {
+  color: #bbb;
+}
+
+/* Empty state */
+.notepad-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #aaa;
+  gap: 8px;
+}
+
+.notepad-empty .empty-icon {
+  font-size: 48px;
+  opacity: 0.4;
+}
+
+.notepad-empty .empty-text {
+  font-size: 14px;
+}
+
+/* ============================================================
+   Minesweeper
+   ============================================================ */
+#minesweeper-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 8px;
+  background: #f0f0f0;
+  overflow: auto;
+}
+
+/* Difficulty selector */
+.minesweeper-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.minesweeper-difficulty-group {
+  display: flex;
+  gap: 4px;
+}
+
+.minesweeper-difficulty-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #ccc;
+  background: #e8e8e8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+
+.minesweeper-difficulty-btn:hover {
+  background: #d8d8d8;
+  border-color: #aaa;
+}
+
+.minesweeper-difficulty-btn.active {
+  background: #0078d4;
+  border-color: #0078d4;
+  color: #fff;
+}
+
+/* Mine counter and timer */
+.minesweeper-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 500px;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.minesweeper-counter {
+  background: #1a1a1a;
+  color: #ff4444;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 24px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 4px;
+  min-width: 80px;
+  text-align: center;
+  letter-spacing: 2px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.minesweeper-counter.mine-count {
+  color: #ff4444;
+}
+
+.minesweeper-counter.timer {
+  color: #44ff44;
+}
+
+.minesweeper-face-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 22px;
+  background: #e8e8e8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s ease;
+}
+
+.minesweeper-face-btn:hover {
+  background: #d8d8d8;
+}
+
+.minesweeper-face-btn:active {
+  background: #c8c8c8;
+}
+
+/* Minesweeper grid */
+.minesweeper-grid {
+  display: inline-grid;
+  gap: 1px;
+  background: #bbb;
+  border: 2px solid #999;
+  border-radius: 4px;
+  padding: 2px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mine-cell {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #888;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.05s ease;
+}
+
+.mine-cell:not(.revealed):not(.game-over) {
+  background: #d0d0d0;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #999;
+}
+
+.mine-cell:not(.revealed):not(.game-over):hover {
+  background: #e0e0e0;
+}
+
+.mine-cell:not(.revealed):not(.game-over):active {
+  background: #c0c0c0;
+  box-shadow: inset -1px -1px 0 #fff, inset 1px 1px 0 #999;
+}
+
+.mine-cell.revealed {
+  background: #e8e8e8;
+  cursor: default;
+  border-color: #ccc;
+}
+
+.mine-cell.revealed.mine {
+  background: #ff4444;
+  border-color: #cc0000;
+}
+
+.mine-cell.revealed.mine.flagged {
+  background: #e8e8e8;
+  border-color: #ccc;
+}
+
+/* Number colors */
+.mine-cell.revealed.mine[data-neighbor="1"] { color: #0000ff; }
+.mine-cell.revealed.mine[data-neighbor="2"] { color: #008000; }
+.mine-cell.revealed.mine[data-neighbor="3"] { color: #ff0000; }
+.mine-cell.revealed.mine[data-neighbor="4"] { color: #000080; }
+.mine-cell.revealed.mine[data-neighbor="5"] { color: #800000; }
+.mine-cell.revealed.mine[data-neighbor="6"] { color: #008080; }
+.mine-cell.revealed.mine[data-neighbor="7"] { color: #000000; }
+.mine-cell.revealed.mine[data-neighbor="8"] { color: #808080; }
+
+/* Cell contents */
+.mine-cell .mine-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.mine-cell .flag-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Game over overlay */
+.minesweeper-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.minesweeper-overlay-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px 32px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.minesweeper-overlay-content h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.minesweeper-overlay-content p {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.minesweeper-overlay-content button {
+  height: 36px;
+  padding: 0 24px;
+  border: none;
+  background: #0078d4;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.1s ease;
+}
+
+.minesweeper-overlay-content button:hover {
+  background: #005a9e;
+}
+
+/* Game container for overlay positioning */
+.minesweeper-game-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ============================================================
+   Spider Solitaire
+   ============================================================ */
+#spider-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  background: #0a5e2b;
+  overflow: hidden;
+}
+
+/* Spider top bar */
+.spider-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 8px;
+  background: #094a23;
+  flex-shrink: 0;
+}
+
+.spider-top-bar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.spider-stock-area {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.spider-stock-btn {
+  width: 36px;
+  height: 48px;
+  border: 2px solid #2e7d32;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #1b5e20, #2e7d32);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.spider-stock-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2e7d32, #388e3c);
+}
+
+.spider-stock-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.spider-stock-btn.deal {
+  font-size: 12px;
+  font-weight: 600;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px;
+  line-height: 1.1;
+}
+
+.spider-stock-count {
+  font-size: 11px;
+  color: #c8e6c9;
+  font-weight: 500;
+}
+
+.spider-game-container {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Spider column */
+.spider-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 70px;
+  max-width: 80px;
+  width: 80px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Card styling */
+.spider-card {
+  width: 100%;
+  height: 36px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 1;
+  transition: box-shadow 0.1s ease;
+}
+
+.spider-card.face-down {
+  background: linear-gradient(135deg, #1565c0, #1976d2);
+  border-color: #0d47a1;
+  color: transparent;
+}
+
+.spider-card.face-down::after {
+  content: "♠";
+  position: absolute;
+  color: rgba(255, 255, 255, 0.15);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.spider-card.face-up {
+  background: #ffffff;
+  border-color: #999;
+  color: #1e1e1e;
+}
+
+.spider-card.face-up.drag-over {
+  box-shadow: 0 0 8px rgba(0, 120, 212, 0.6);
+  border-color: #0078d4;
+}
+
+.spider-card.selected {
+  box-shadow: 0 0 6px rgba(0, 120, 212, 0.8), 0 2px 4px rgba(0, 0, 0, 0.2);
+  border-color: #0078d4;
+}
+
+.spider-card.dragging {
+  opacity: 0.6;
+  z-index: 999;
+}
+
+.spider-card .card-rank {
+  font-size: 16px;
+}
+
+.spider-card .card-suit {
+  font-size: 14px;
+}
+
+/* Column drop indicator */
+.spider-column-drop-zone {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed transparent;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 10;
+  transition: border-color 0.15s ease;
+}
+
+.spider-column-drop-zone.drag-over {
+  border-color: #0078d4;
+  background: rgba(0, 120, 212, 0.1);
+}
+
+/* Stock pile card */
+.spider-stock-card {
+  width: 36px;
+  height: 48px;
+  border: 2px solid #2e7d32;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #1565c0, #1976d2);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.spider-stock-card:hover {
+  transform: scale(1.05);
+}
+
+/* Win overlay */
+.spider-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.spider-overlay-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.spider-overlay-content h2 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.spider-overlay-content p {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.spider-overlay-content button {
+  height: 36px;
+  padding: 0 24px;
+  border: none;
+  background: #0078d4;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.1s ease;
+}
+
+.spider-overlay-content button:hover {
+  background: #005a9e;
+}
+
+/* New Game button */
+.spider-new-game-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #2e7d32;
+  background: #1b5e20;
+  color: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.spider-new-game-btn:hover {
+  background: #2e7d32;
+}

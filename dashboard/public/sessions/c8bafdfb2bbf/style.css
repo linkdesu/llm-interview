@@ -1,0 +1,208 @@
+/* Neon Snake - Geometric Visual Style */
+
+:root {
+  --bg-color: #0a0a0f;
+  --neon-cyan: #00f0ff;
+  --neon-green: #39ff14;
+  --neon-magenta: #ff00ff;
+  --neon-yellow: #ffff00;
+  --neon-red: #ff0044;
+  --grid-color: rgba(0, 240, 255, 0.08);
+  --text-color: #e0e0e0;
+  --panel-bg: rgba(10, 10, 20, 0.95);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  width: 100vmin;
+  height: 100vmin;
+  max-width: 800px;
+  max-height: 800px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Screen management */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+.screen.active {
+  display: flex;
+}
+
+/* Title */
+.title {
+  font-size: clamp(2rem, 6vmin, 3.5rem);
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px var(--neon-cyan), 0 0 30px var(--neon-cyan), 0 0 60px var(--neon-cyan);
+  margin-bottom: 2rem;
+  letter-spacing: 0.3em;
+}
+
+.game-over-title {
+  font-size: clamp(2rem, 5vmin, 3rem);
+  color: var(--neon-red);
+  text-shadow: 0 0 10px var(--neon-red), 0 0 30px var(--neon-red);
+  margin-bottom: 1rem;
+  letter-spacing: 0.2em;
+}
+
+/* High score display */
+.high-score-display {
+  font-size: 1.1rem;
+  color: var(--neon-yellow);
+  text-shadow: 0 0 8px var(--neon-yellow);
+  margin-bottom: 1.5rem;
+}
+
+/* Board size config */
+.board-size-config {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.board-size-config label {
+  color: var(--neon-cyan);
+  font-size: 0.95rem;
+}
+
+.board-size-config input {
+  width: 80px;
+  padding: 0.5rem;
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  font-family: inherit;
+  font-size: 1rem;
+  text-align: center;
+  outline: none;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+.board-size-config input:focus {
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
+}
+
+.size-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Buttons */
+.neon-btn {
+  padding: 0.8rem 2.5rem;
+  font-family: inherit;
+  font-size: 1.1rem;
+  color: var(--neon-cyan);
+  background: transparent;
+  border: 2px solid var(--neon-cyan);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.4), inset 0 0 10px rgba(0, 240, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.neon-btn:hover {
+  background: rgba(0, 240, 255, 0.15);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.7), inset 0 0 20px rgba(0, 240, 255, 0.2);
+}
+
+.neon-btn.secondary {
+  color: var(--neon-magenta);
+  border-color: var(--neon-magenta);
+  box-shadow: 0 0 10px rgba(255, 0, 255, 0.4), inset 0 0 10px rgba(255, 0, 255, 0.1);
+  margin-top: 0.75rem;
+}
+
+.neon-btn.secondary:hover {
+  background: rgba(255, 0, 255, 0.15);
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.7), inset 0 0 20px rgba(255, 0, 255, 0.2);
+}
+
+/* Waiting overlay */
+#waiting-overlay {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.overlay-content {
+  text-align: center;
+}
+
+.waiting-text {
+  font-size: 1.5rem;
+  color: var(--neon-green);
+  text-shadow: 0 0 10px var(--neon-green), 0 0 30px var(--neon-green);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Game screen */
+#game-screen {
+  padding: 0;
+}
+
+.score-display {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.2rem;
+  color: var(--neon-green);
+  text-shadow: 0 0 8px var(--neon-green);
+  z-index: 10;
+}
+
+#game-canvas {
+  display: block;
+  border: 2px solid var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.3), inset 0 0 30px rgba(0, 240, 255, 0.05);
+}
+
+/* Game over */
+.final-score {
+  font-size: 1.3rem;
+  color: var(--text-color);
+  margin-bottom: 0.5rem;
+}
+
+.high-score-achieved {
+  font-size: 1rem;
+  color: var(--neon-yellow);
+  text-shadow: 0 0 8px var(--neon-yellow);
+  margin-bottom: 1.5rem;
+}
+
+

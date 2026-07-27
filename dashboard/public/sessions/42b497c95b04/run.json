@@ -1,0 +1,31 @@
+{
+  "question": {
+    "name": "city-time-machine",
+    "hasSpec": false,
+    "hasTickets": false
+  },
+  "model": {
+    "name": "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M",
+    "provider": "llamacpp-local",
+    "modelId": "qwopus3.6-35b-a3b-q5"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 1,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "42b497c95b04",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-07-27T06:54:56.558Z",
+  "endedAt": "2026-07-27T07:07:47.594Z",
+  "durationMs": 771016,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 200,
+  "contractViolations": []
+}

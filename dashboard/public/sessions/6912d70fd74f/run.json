@@ -1,0 +1,82 @@
+{
+  "question": {
+    "name": "snake",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwen3.6-35B-A3B-UD-Q5_K_M",
+    "provider": "llamacpp-local",
+    "modelId": "qwen3.6-35b-a3b-q5"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 1,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "6912d70fd74f",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-07-27T09:31:45.818Z",
+  "endedAt": "2026-07-27T09:55:04.930Z",
+  "durationMs": 1399102,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 200,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 137970
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 1011292
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 15032
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 218580
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 16216
+    }
+  ]
+}

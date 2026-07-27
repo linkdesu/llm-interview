@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neon Snake</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Start Menu -->
+    <div id="start-menu" class="screen active">
+      <h1 class="title">NEON SNAKE</h1>
+      <div class="high-score-display">Session High Score: <span id="high-score">0</span></div>
+      <div class="board-size-config">
+        <label for="board-size">Board Size:</label>
+        <input type="number" id="board-size" value="20" min="10" max="30">
+        <span class="size-hint">Grid: <span id="size-preview">20</span>×<span id="size-preview-2">20</span></span>
+      </div>
+      <button id="start-btn" class="neon-btn">Start Game</button>
+    </div>
+
+    <!-- Waiting Overlay -->
+    <div id="waiting-overlay" class="screen">
+      <div class="overlay-content">
+        <p class="waiting-text">Press any key to begin</p>
+      </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+      <div class="score-display">Score: <span id="score">0</span></div>
+      <canvas id="game-canvas"></canvas>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="screen">
+      <h2 class="game-over-title">GAME OVER</h2>
+      <p class="final-score">Score: <span id="final-score">0</span></p>
+      <p class="high-score-achieved" id="high-score-msg" style="display:none;">New High Score!</p>
+      <button id="restart-btn" class="neon-btn">Play Again</button>
+      <button id="menu-btn" class="neon-btn secondary">Main Menu</button>
+    </div>
+
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
