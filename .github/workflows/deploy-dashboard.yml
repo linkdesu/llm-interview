@@ -1,0 +1,33 @@
+name: Deploy dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/deploy-dashboard.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Package
+        run: tar -czf deploy.tar.gz -C dist .
+      - name: Upload to vxServer
+        env:
+          VXSERVER_DEPLOY_KEY: ${{ secrets.VXSERVER_DEPLOY_KEY }}
+        run: |
+          curl --fail-with-body -X POST \
+            https://vx.link/openapi/v3/vxserver \
+            -H "X-Deploy-Key: $VXSERVER_DEPLOY_KEY" \
+            -F "action=static_deploy" \
+            -F "file=@deploy.tar.gz" \
+            -F "note=build-${{ github.sha }}"
