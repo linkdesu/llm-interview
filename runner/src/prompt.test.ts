@@ -157,8 +157,8 @@ describe("buildEvaluationPrompt", () => {
 
   it("demands read-only inspection", () => {
     const prompt = buildEvaluationPrompt(baseQuestion, ticket, 3);
-    expect(prompt).toContain("READ-ONLY");
-    expect(prompt).toContain("do NOT create, modify, or delete any file");
+    expect(prompt).toContain("ONLY read files in this directory");
+    expect(prompt).toContain("Do NOT create, modify, or delete any file");
   });
 
   it("requires the verdict marker", () => {

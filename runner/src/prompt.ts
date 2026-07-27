@@ -84,15 +84,21 @@ export function buildEvaluationPrompt(
     ? "\n\nA detailed specification is available at ./spec.md in this directory. Read it with your read tool if you need it for context."
     : "";
 
-  return `Your current working directory contains a web project built by another coding agent. You are evaluating that agent's work. Everything you need is in THIS directory — the one you are already in. Do NOT look for files anywhere else.
+  return `Act as a senior engineer for code quality; keep things simple and robust.
+Your current working directory contains a web project built by another coding agent. You are evaluating
+that agent's work. Everything you need is in THIS directory — the one you are already in.
+
+These are the review rules you must follow:
+
+- ONLY read files in this directory. Do NOT look for files anywhere else. Do NOT create, modify, or delete any file.
+- ALWAYS end your reply with exactly one verdict line: <verdict>COMPLETE</verdict> or <verdict>INCOMPLETE</verdict>
 
 The agent's overall task was:
 ${question.intent.trim()}${specSection}
 
-A ticket breakdown is available at ./tickets.md in this directory. You MUST read that file with your read tool first. The agent was asked to complete ONLY ticket ${ticket.index} of ${totalTickets}: \`${ticket.title}\`.
-Then inspect the project files in this directory (index.html, style.css, script.js) and judge whether this ticket's requirements are actually met by the current code — do not trust the \`[x]\` marks in tickets.md, verify against the real code.
-Work READ-ONLY: do NOT create, modify, or delete any file.
-
-End your reply with exactly one verdict line:
-<verdict>COMPLETE</verdict> or <verdict>INCOMPLETE</verdict>`;
+A ticket breakdown is available at ./tickets.md in this directory. You MUST read that file with your
+read tool first. The agent was asked to complete ONLY ticket ${ticket.index} of ${totalTickets}: \`${ticket.title}\`.
+Then inspect the project files in this directory (index.html, style.css, script.js) and judge whether
+this ticket's requirements are actually met by the current code — do not trust the \`[x]\` marks in
+tickets.md, verify against the real code.`;
 }
