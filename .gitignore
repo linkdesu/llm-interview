@@ -2,3 +2,5 @@
 runner/node_modules
 .DS_Store
 pi-run-*.log
+session/*
+!session/.gitkeep
