@@ -1451,3 +1451,193 @@ describe("runMatrix API failure handling", () => {
     expect(results[1].status).toBe("ok");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Matrix index log (run-log.ts): one pi-run-YYYYMMDD-HHmmss.log per matrix
+// execution, with timestamped lines, self-contained combo START/END markers,
+// and a SUMMARY. The END line must carry the archived session.jsonl path so
+// failures can be located with `grep "END: ERROR"` even after an interrupt.
+// ---------------------------------------------------------------------------
+
+describe("runMatrix index log", () => {
+  let tempRoot: string;
+  let piHome: string;
+  let runTempRoot: string;
+
+  beforeEach(async () => {
+    tempRoot = makeTempRoot();
+    await mkdir(tempRoot, { recursive: true });
+    piHome = join(tempRoot, ".pi-home");
+    runTempRoot = join(tempRoot, "runs");
+    await mkdir(runTempRoot, { recursive: true });
+  });
+
+  afterAll(async () => {
+    try {
+      await rm(tempRoot, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  const ISO_PREFIX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z /;
+
+  it("writes timestamped START/END markers and a SUMMARY for a healthy run", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-index-ok");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 2);
+
+    const stub = join(tempRoot, "stub-index-ok");
+    await createScriptedStubPi(stub, { 1: CLEAN_SESSION, 2: CLEAN_SESSION });
+
+    const indexLogPath = join(tempRoot, "pi-run-20990101-000000.log");
+    await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      indexLogPath,
+    });
+
+    const content = await readFile(indexLogPath, "utf-8");
+
+    // Every physical line carries an ISO timestamp prefix
+    for (const line of content.trimEnd().split("\n")) {
+      expect(line).toMatch(ISO_PREFIX);
+    }
+
+    // START marker names the combo and the (temporary) pi-run dir
+    expect(content).toContain(
+      "=== Combo 1/1 START: q-ticketed × model-alpha (pi-run-"
+    );
+
+    // END marker carries the archived transcript path — and it exists
+    const endMatch = content.match(
+      /=== Combo 1\/1 END: OK \([\d.]+s\) session: (.+) ===/
+    );
+    expect(endMatch).not.toBeNull();
+    expect(endMatch![1]).toContain(sessionRoot);
+    expect(endMatch![1].endsWith("session.jsonl")).toBe(true);
+    expect(await readFile(endMatch![1], "utf-8")).toContain("done");
+
+    // SUMMARY for a clean run
+    expect(content).toContain("=== SUMMARY: 1 combos, 0 failed");
+  });
+
+  it("records a failed combo's session path in its END line and the SUMMARY", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-index-error");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 1);
+
+    // Single-invocation flow; the stub writes a session file, then exceeds
+    // the turn limit and gets killed — an error combo WITH a transcript.
+    const killerStub = join(tempRoot, "stub-index-killed");
+    await writeFile(
+      killerStub,
+      `#!/usr/bin/env bash
+SESSION_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+echo '${CLEAN_SESSION}' > "$SESSION_DIR/session.jsonl"
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+for i in 1 2 3 4 5; do echo '{"type":"turn_start"}'; done
+sleep 30
+`,
+      "utf-8"
+    );
+    await chmod(killerStub, 0o755);
+
+    const indexLogPath = join(tempRoot, "pi-run-20990101-000001.log");
+    await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: killerStub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 2,
+      runRules: "",
+      indexLogPath,
+    });
+
+    const content = await readFile(indexLogPath, "utf-8");
+
+    // END: ERROR still carries the archived transcript path
+    const endMatch = content.match(
+      /=== Combo 1\/1 END: ERROR \([\d.]+s\) session: (.+) ===/
+    );
+    expect(endMatch).not.toBeNull();
+    expect(endMatch![1]).toContain(sessionRoot);
+    expect(endMatch![1].endsWith("session.jsonl")).toBe(true);
+
+    // SUMMARY lists the failure with its transcript path
+    expect(content).toContain("=== SUMMARY: 1 combos, 1 failed");
+    expect(content).toMatch(
+      /ERROR q-ticketed × model-alpha → .+session\.jsonl/
+    );
+  });
+
+  it("still writes the SUMMARY when the matrix aborts on a terminal API failure", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-index-abort");
+    await mkdir(repoDir, { recursive: true });
+
+    // Two models × one question: model-alpha dies from an API failure,
+    // model-beta must never run — but the SUMMARY must still be written.
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        { name: "model-alpha", provider: "llamacpp-local", modelId: "alpha.gguf", params: { temp: 0.7 } },
+        { name: "model-beta", provider: "llamacpp-local", modelId: "beta.gguf", params: { temp: 0.7 } },
+      ],
+      [{ name: "q-hello", intent: "Build a hello world page." }]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    const apiErrorSession =
+      '{"type":"message","message":{"role":"assistant","content":[],"stopReason":"error"}}';
+    const stub = join(tempRoot, "stub-index-api-error");
+    await createScriptedStubPi(stub, { 1: apiErrorSession });
+
+    const indexLogPath = join(tempRoot, "pi-run-20990101-000002.log");
+    await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      indexLogPath,
+    });
+
+    const content = await readFile(indexLogPath, "utf-8");
+
+    // The failed combo's END line carries its transcript path
+    expect(content).toMatch(
+      /=== Combo 1\/2 END: ERROR \([\d.]+s\) session: .+session\.jsonl ===/
+    );
+    // SUMMARY exists despite the abort, and names the abort reason
+    expect(content).toContain("=== SUMMARY: 1 combos, 1 failed — aborted:");
+    // model-beta never started (it may still appear as "pending" in the
+    // progress overview — that is expected)
+    expect(content).not.toContain("START: q-hello × model-beta");
+  });
+});

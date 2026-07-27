@@ -8,9 +8,10 @@ import {
 } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { join, resolve, sep } from "node:path";
+import { join, resolve, sep, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
+import { setRunLogPath, runLog } from "./run-log";
 import { loadConfig, loadRegistry, type RegistryModel } from "./registry";
 import { loadQuestions, type Question, type Ticket } from "./question";
 import {
@@ -28,9 +29,11 @@ import {
 } from "./pi-runner";
 
 const log = (msg: string) => {
+  runLog(`[matrix] ${msg}`);
   if (process.env.NODE_ENV !== "test") console.error(`[matrix] ${msg}`);
 };
 const progress = (msg: string) => {
+  runLog(msg);
   if (process.env.NODE_ENV !== "test") console.log(msg);
 };
 
@@ -56,6 +59,13 @@ export interface RunMatrixOptions extends PiEnvironment {
   piVersion: string;
   /** Global run rules injected into every prompt. */
   runRules: string;
+  /**
+   * Optional path of the matrix index log (see run-log.ts). When set, every
+   * [pi]/[matrix]/progress line plus combo START/END markers and a final
+   * SUMMARY are appended to this file with ISO timestamps. When omitted, no
+   * index log is written.
+   */
+  indexLogPath?: string;
 }
 
 /**
@@ -373,7 +383,12 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     piVersion,
     runRules,
     maxTurns,
+    indexLogPath,
   } = options;
+
+  // Enable the matrix index log before anything can fail, so even startup
+  // errors (isolation guard, unknown model ids) leave a trace.
+  setRunLogPath(indexLogPath ?? null);
 
   // Isolation guard: the temp area for run workdirs must live outside the
   // repo (approximated by sessionRoot's parent) so the model can never read
@@ -413,6 +428,24 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
   const outcomes: RunComboOutcome[] = [];
   const completed = new Set<string>();
+  // Per-combo end records for the index log's SUMMARY section. Each combo's
+  // END line is self-contained, so the SUMMARY is a convenience that exists
+  // only when the matrix returns normally (including an API-failure abort).
+  const comboEndRecords: Array<{
+    label: string;
+    status: "ok" | "error";
+    sessionJsonl: string | null;
+  }> = [];
+  const writeIndexSummary = (aborted?: string): void => {
+    const failed = comboEndRecords.filter((r) => r.status !== "ok");
+    runLog(
+      `=== SUMMARY: ${comboEndRecords.length} combos, ${failed.length} failed` +
+      (aborted ? ` — aborted: ${aborted}` : "")
+    );
+    for (const r of failed) {
+      runLog(`  ${r.status.toUpperCase()} ${r.label} → ${r.sessionJsonl ?? "none"}`);
+    }
+  };
 
   // Model-major iteration: one model finishes all questions before the next
   for (const model of filteredModels) {
@@ -433,6 +466,11 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       // Terminal API failure that aborts the whole matrix (recorded in
       // run.json); undefined while the combo is healthy.
       let apiError: string | undefined;
+      // Absolute path of the archived session.jsonl for this combo (null
+      // when the run produced no transcript or crashed before archiving).
+      let archivedSessionJsonl: string | null = null;
+      // Exception message when the combo crashed without archiving.
+      let failReason: string | undefined;
       // A model may override the global max turn limit when it needs
       // more attempts to finish a task.
       const effectiveMaxTurns = model.maxTurns ?? maxTurns;
@@ -443,6 +481,9 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         // single-invocation flow with an unchanged prompt.
         const perTicket = question.tickets.length >= 2;
         const setup = await setupWorkdir(question, tempRoot);
+        runLog(
+          `=== Combo ${comboIndex}/${total} START: ${label} (${basename(setup.runDir)}) ===`
+        );
 
         type Planned = { sessionId: string; prompt: string; ticket?: Ticket };
         const plan: Planned[] = perTicket
@@ -603,6 +644,9 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
         // Concatenate the invocations' transcripts into session.jsonl
         await concatenateSessions(sessionFiles, archiveDir);
+        if (sessionFiles.length > 0) {
+          archivedSessionJsonl = join(archiveDir, "session.jsonl");
+        }
 
         // Strip image data from session.jsonl to keep archive size manageable
         await stripSessionImageData(archiveDir);
@@ -679,6 +723,8 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
         const message =
           err instanceof Error ? err.message : String(err);
+        failReason = message;
+        runLog(`[runMatrix] Combo ${question.name} × ${model.name} failed: ${message}`);
         console.error(
           `[runMatrix] Combo ${question.name} × ${model.name} failed: ${message}`
         );
@@ -698,6 +744,15 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
       completed.add(comboId);
       const durSec = ((Date.now() - Date.parse(startedAt)) / 1000).toFixed(1);
+      // Self-contained END marker for the index log: status, duration, and
+      // the archived transcript path — greppable even when the matrix is
+      // interrupted before the SUMMARY can be written.
+      runLog(
+        `=== Combo ${comboIndex}/${total} END: ${status.toUpperCase()} (${durSec}s) session: ` +
+        (archivedSessionJsonl ?? `none${failReason ? ` (${failReason})` : ""}`) +
+        ` ===`
+      );
+      comboEndRecords.push({ label, status, sessionJsonl: archivedSessionJsonl });
       const statusIcon = status === "ok" ? "✅" : "❌";
       progress(`=== Combo ${comboIndex}/${total} Done: ${statusIcon} ${status.toUpperCase()} (${durSec}s) ===`);
 
@@ -723,11 +778,13 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           `\n⚠ Matrix aborted: terminal API failure (${apiError}).\n` +
           `Restore connectivity, then re-run the remaining combos.`
         );
+        writeIndexSummary(apiError);
         return outcomes;
       }
     }
   }
 
+  writeIndexSummary();
   return outcomes;
 }
 
@@ -786,23 +843,42 @@ if (import.meta.main) {
   const configPath = join(repoRoot, "runner", "config.toml");
   const config = await loadConfig(configPath);
 
+  // One index log per matrix execution, written to the current working
+  // directory and named by the matrix start time (see run-log.ts).
+  const indexLogPath = join(
+    process.cwd(),
+    `pi-run-${formatTimestamp(new Date())}.log`
+  );
+  setRunLogPath(indexLogPath);
+  log(`writing index log: ${indexLogPath}`);
+
   // Run the matrix with defaults
-  const outcomes = await runMatrix({
-    questionDir: join(repoRoot, "question"),
-    configPath,
-    sessionRoot: join(repoRoot, "session"),
-    piBin,
-    piHome: join(repoRoot, ".pi-home"),
-    tempRoot: join(tmpdir(), "llm-interview-runs"),
-    questionFilter,
-    modelFilter,
-    maxTurns: config.maxTurns,
-    runRules: config.runRules,
-    piVersion: await detectPiVersion(piBin).then((v) => {
-      log(`pi --version => ${v}`);
-      return v;
-    }),
-  });
+  let outcomes: RunComboOutcome[];
+  try {
+    outcomes = await runMatrix({
+      questionDir: join(repoRoot, "question"),
+      configPath,
+      sessionRoot: join(repoRoot, "session"),
+      piBin,
+      piHome: join(repoRoot, ".pi-home"),
+      tempRoot: join(tmpdir(), "llm-interview-runs"),
+      questionFilter,
+      modelFilter,
+      maxTurns: config.maxTurns,
+      runRules: config.runRules,
+      indexLogPath,
+      piVersion: await detectPiVersion(piBin).then((v) => {
+        log(`pi --version => ${v}`);
+        return v;
+      }),
+    });
+  } catch (err) {
+    // Startup failures (unknown model id, isolation guard, ...) abort before
+    // any combo runs — leave a trace in the index log.
+    const message = err instanceof Error ? err.message : String(err);
+    runLog(`=== MATRIX FAILED: ${message} ===`);
+    throw err;
+  }
 
   // Print per-combo status table
   console.log("\n=== Run Matrix Results ===\n");

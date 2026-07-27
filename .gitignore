@@ -1,3 +1,4 @@
 .pi-home
 runner/node_modules
 .DS_Store
+pi-run-*.log

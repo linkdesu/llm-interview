@@ -11,9 +11,11 @@ import {
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { runLog } from "./run-log";
 import type { Question } from "./question";
 
 const log = (msg: string) => {
+  runLog(`[pi] ${msg}`);
   if (process.env.NODE_ENV !== "test") console.error(`[pi] ${msg}`);
 };
 
