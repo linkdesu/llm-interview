@@ -423,6 +423,12 @@ a {
   font-size: 13px;
 }
 
+/* Mobile-only note under the locked preview; revealed by the media query. */
+.artifact-hint {
+  display: none;
+  margin: 6px 0 0;
+}
+
 .combo-actions {
   display: flex;
   gap: 16px;
@@ -691,4 +697,150 @@ a {
   align-items: center;
   justify-content: center;
   color: var(--fg-secondary);
+}
+
+/* ── Mobile (≤768px): transcript-first, read-only previews ──────────────
+   ADR 0008. CSS-only: iframes stay rendered but are locked via
+   pointer-events, Expand is hidden, SessionView stacks panel-first. */
+
+@media (max-width: 768px) {
+  /* Topbar */
+  .topbar {
+    gap: 16px;
+    padding: 0 16px;
+  }
+
+  /* Drop the generated-at micro; brand and toggle need the room. */
+  .topbar-right .micro {
+    display: none;
+  }
+
+  /* Hero */
+  .hero {
+    padding: 64px 20px 48px;
+  }
+
+  .hero-title {
+    font-size: 36px;
+  }
+
+  .hero-lede {
+    max-width: none;
+    font-size: 15px;
+  }
+
+  .hero-cta {
+    margin-top: 32px;
+  }
+
+  /* Stats stack vertically; left borders become top borders. */
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat {
+    padding: 16px 0;
+    border-left: none;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .stat:first-child {
+    border-top: none;
+  }
+
+  /* Question index */
+  .section {
+    padding: 0 16px 64px;
+  }
+
+  .question-row {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .question-index {
+    display: none;
+  }
+
+  .question-name {
+    font-size: 17px;
+  }
+
+  .question-meta {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .question-arrow {
+    margin-left: auto;
+  }
+
+  /* Question view */
+  .page {
+    padding: 24px 16px 64px;
+  }
+
+  .page-title {
+    font-size: 28px;
+  }
+
+  /* Combo cards: single column; previews locked read-only, no Expand.
+     Only the Expand link is an <a>; the transcript toggle is a <button>. */
+  .combo-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .artifact-frame {
+    height: 240px;
+    pointer-events: none;
+  }
+
+  .artifact-hint {
+    display: block;
+  }
+
+  .combo-actions a.card-link {
+    display: none;
+  }
+
+  /* Transcript */
+  .event-item-inline {
+    flex-wrap: wrap;
+  }
+
+  /* Session view: hide the stage, stack the panel full-width. */
+  .session-topbar {
+    gap: 12px;
+    padding: 0 16px;
+  }
+
+  .session-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .session-topbar .micro {
+    display: none;
+  }
+
+  .session-body {
+    flex-direction: column;
+  }
+
+  .session-stage {
+    display: none;
+  }
+
+  .session-panel {
+    flex: 1;
+    min-height: 0;
+    width: auto;
+    border-left: none;
+  }
+
+  .session-footer {
+    padding: 0 16px;
+  }
 }

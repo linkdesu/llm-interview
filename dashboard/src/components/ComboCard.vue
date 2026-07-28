@@ -60,13 +60,15 @@ async function toggleTranscript() {
     <!-- allow-same-origin is required: without it the iframe gets an opaque
          origin and <script type="module"> artifacts fail their CORS check.
          The sandbox still blocks top navigation, popups, forms, etc. -->
-    <iframe
-      v-if="combo.files.artifact"
-      class="artifact-frame"
-      :src="combo.files.artifact"
-      :title="comboLabel(combo)"
-      sandbox="allow-scripts allow-same-origin"
-    ></iframe>
+    <template v-if="combo.files.artifact">
+      <iframe
+        class="artifact-frame"
+        :src="combo.files.artifact"
+        :title="comboLabel(combo)"
+        sandbox="allow-scripts allow-same-origin"
+      ></iframe>
+      <p class="micro artifact-hint">Live preview · interactive on desktop</p>
+    </template>
     <div v-else class="artifact-placeholder">No artifact for this run</div>
 
     <div class="combo-actions">
