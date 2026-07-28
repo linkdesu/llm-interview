@@ -37,5 +37,5 @@ The mapping JSON generated at dashboard build time; the index of Session data in
 _Avoid_: index.json, mapping
 
 **Dashboard**:
-The statically published site (GitHub Pages) aggregating all Sessions, letting viewers compare Artifact quality and transcripts across Question / Model combos. Artifact-first; the process view is expandable.
+The statically published site (GitHub Pages) aggregating all Sessions, letting viewers compare Artifact quality and transcripts across Question / Model combos. Artifact-first; the process view is expandable. On mobile (viewport ≤ 768px) it degrades to a transcript-first experience: Artifact iframes render read-only and cannot be expanded (ADR 0008).
 _Avoid_: site, viewer
