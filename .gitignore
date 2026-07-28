@@ -4,3 +4,6 @@ runner/node_modules
 pi-run-*.log
 session/*
 !session/.gitkeep
+
+# Site favicon must be tracked despite global *.ico ignores.
+!dashboard/public/favicon.ico
