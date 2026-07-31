@@ -66,6 +66,12 @@ export interface RunMatrixOptions extends PiEnvironment {
    * index log is written.
    */
   indexLogPath?: string;
+  /**
+   * Question-level concurrency within one model (default 1 = fully
+   * sequential). Models always run strictly one after another regardless
+   * of this value. Must be a positive integer.
+   */
+  concurrency?: number;
 }
 
 /**
@@ -400,7 +406,17 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     runRules,
     maxTurns,
     indexLogPath,
+    concurrency = 1,
   } = options;
+
+  // Fail fast on an invalid concurrency: a typo discovered hours into the
+  // matrix is far worse than a startup error (validated here rather than
+  // only in the CLI so the engine contract holds for every caller).
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error(
+      `Invalid concurrency: ${concurrency} (expected a positive integer)`
+    );
+  }
 
   // Enable the matrix index log before anything can fail, so even startup
   // errors (isolation guard, unknown model ids) leave a trace.
@@ -465,7 +481,19 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
   // Model-major iteration: one model finishes all questions before the next
   for (const model of filteredModels) {
-    for (const question of filteredQuestions) {
+    // Concurrency: up to `concurrency` questions of THIS model execute
+    // simultaneously, pulled from the queue head in their original order.
+    // All completion handling (outcomes, END markers, progress overview)
+    // is driven by combo completion, not by loop iteration.
+    const queue = filteredQuestions.slice();
+    // Set when any concurrent combo observes a terminal API failure: no
+    // new combos are dequeued; in-flight combos finish and archive, then
+    // the matrix aborts after the batch settles.
+    let apiError: string | undefined;
+
+    const runOne = async (
+      question: (typeof filteredQuestions)[number]
+    ): Promise<void> => {
       const comboId = computeComboId(question.name, model.name, model.params);
       const startedAt = new Date().toISOString();
 
@@ -494,7 +522,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         runRules,
       });
 
-      const { outcome, apiError, archivedSessionJsonl, failReason } = result;
+      const { outcome, apiError: comboApiError, archivedSessionJsonl, failReason } = result;
 
       outcomes.push(outcome);
 
@@ -527,16 +555,32 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       progress(lines.join("\n"));
 
       // A terminal API failure is infrastructure, not model behavior: stop
-      // the whole matrix and wait for manual recovery instead of burning
-      // the remaining combos on guaranteed failures.
-      if (apiError) {
-        progress(
-          `\n⚠ Matrix aborted: terminal API failure (${apiError}).\n` +
-          `Restore connectivity, then re-run the remaining combos.`
-        );
-        writeIndexSummary(apiError);
-        return outcomes;
+      // dequeuing; the matrix aborts once the in-flight batch settles.
+      if (comboApiError) apiError = comboApiError;
+    };
+
+    const lanes = Array.from(
+      { length: Math.min(concurrency, queue.length) },
+      async () => {
+        while (!apiError) {
+          const question = queue.shift();
+          if (!question) return;
+          await runOne(question);
+        }
       }
+    );
+    await Promise.all(lanes);
+
+    // A terminal API failure is infrastructure, not model behavior: stop
+    // the whole matrix and wait for manual recovery instead of burning
+    // the remaining combos on guaranteed failures.
+    if (apiError) {
+      progress(
+        `\n⚠ Matrix aborted: terminal API failure (${apiError}).\n` +
+        `Restore connectivity, then re-run the remaining combos.`
+      );
+      writeIndexSummary(apiError);
+      return outcomes;
     }
   }
 
@@ -905,6 +949,7 @@ if (import.meta.main) {
   // Parse CLI arguments
   let questionFilter: string[] | undefined;
   let modelFilter: string[] | undefined;
+  let concurrency: number | undefined;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -914,6 +959,20 @@ if (import.meta.main) {
       case "--model":
         modelFilter = parseFilter(args[++i]);
         break;
+      case "--concurrency": {
+        // Question-level concurrency within one model; default 1. Invalid
+        // values abort at startup — a typo must not surface hours in.
+        const raw = args[++i];
+        const parsed = raw === undefined ? NaN : Number(raw);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          console.error(
+            `error: --concurrency must be a positive integer (got "${raw}")`
+          );
+          process.exit(1);
+        }
+        concurrency = parsed;
+        break;
+      }
     }
   }
 
@@ -946,6 +1005,7 @@ if (import.meta.main) {
       tempRoot: join(tmpdir(), "llm-interview-runs"),
       questionFilter,
       modelFilter,
+      concurrency,
       maxTurns: config.maxTurns,
       runRules: config.runRules,
       indexLogPath,

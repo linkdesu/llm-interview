@@ -1641,3 +1641,454 @@ sleep 30
     expect(content).not.toContain("START: q-hello × model-beta");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Question-level concurrency (--concurrency N): up to N questions of one
+// model execute simultaneously, pulled in their original order; models
+// stay strictly sequential.
+// Asserted through stub-pi start/end markers (process-level overlap), never
+// through scheduling internals.
+// ---------------------------------------------------------------------------
+
+/**
+ * A stub pi that records `start`/`end` markers (model id + workdir) around
+ * a fixed sleep, so tests can measure real process-level overlap. Fulfills
+ * the same session/artifact contract as the other stubs.
+ */
+async function createMarkerStubPi(
+  stubPath: string,
+  markerLogPath: string,
+  sleepSeconds: number
+) {
+  const script = `#!/usr/bin/env bash
+# Stub pi that logs start/end markers for concurrency observation
+MARKER_LOG="${markerLogPath}"
+MODEL=""
+SESSION_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    --model) MODEL="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+echo "start $MODEL $(pwd)" >> "$MARKER_LOG"
+sleep ${sleepSeconds}
+echo "end $MODEL $(pwd)" >> "$MARKER_LOG"
+echo '${CLEAN_SESSION}' > "$SESSION_DIR/session.jsonl"
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+exit 0
+`;
+  await writeFile(stubPath, script, "utf-8");
+  await chmod(stubPath, 0o755);
+}
+
+interface MarkerEvent {
+  kind: "start" | "end";
+  model: string;
+  workdir: string;
+}
+
+async function readMarkerEvents(path: string): Promise<MarkerEvent[]> {
+  const content = await readFile(path, "utf-8");
+  return content
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [kind, model, workdir] = line.split(" ");
+      return { kind: kind as "start" | "end", model, workdir };
+    });
+}
+
+/**
+ * Maximum simultaneously open invocations across the given marker events
+ * (a sweep: +1 on start, -1 on end, tracking the peak).
+ */
+function maxOverlap(
+  events: MarkerEvent[],
+  match: (e: MarkerEvent) => boolean = () => true
+): number {
+  let open = 0;
+  let max = 0;
+  for (const e of events.filter(match)) {
+    open += e.kind === "start" ? 1 : -1;
+    if (open > max) max = open;
+  }
+  return max;
+}
+
+describe("runMatrix concurrency", () => {
+  let tempRoot: string;
+  let piHome: string;
+  let runTempRoot: string;
+  let markerLogPath: string;
+  let stubPath: string;
+
+  beforeEach(async () => {
+    tempRoot = makeTempRoot();
+    await mkdir(tempRoot, { recursive: true });
+    piHome = join(tempRoot, ".pi-home");
+    runTempRoot = join(tempRoot, "runs");
+    await mkdir(runTempRoot, { recursive: true });
+    markerLogPath = join(tempRoot, "markers.log");
+    stubPath = join(tempRoot, "stub-pi-marker");
+    await createMarkerStubPi(stubPath, markerLogPath, 0.2);
+  });
+
+  afterAll(async () => {
+    try {
+      await rm(tempRoot, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  it("rejects a non-integer or < 1 concurrency before any combo runs", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-invalid-concurrency");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeTicketedFixtures(repoDir, 1);
+
+    for (const bad of [0, -2, 1.5]) {
+      await expect(
+        runMatrix({
+          questionDir,
+          configPath,
+          sessionRoot,
+          piBin: stubPath,
+          piHome,
+          tempRoot: runTempRoot,
+          piVersion: "test-1.0",
+          maxTurns: 100,
+          runRules: "",
+          concurrency: bad,
+        })
+      ).rejects.toThrow(/concurrency/);
+    }
+
+    // Nothing ran: no archives, no stub invocations.
+    expect(await listDir(sessionRoot)).toHaveLength(0);
+    expect(await listDir(tempRoot)).not.toContain("markers.log");
+  });
+
+  it("runs up to N questions of one model concurrently with isolated archives", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-ceiling");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-1", intent: "Build page one." },
+        { name: "q-2", intent: "Build page two." },
+        { name: "q-3", intent: "Build page three." },
+        { name: "q-4", intent: "Build page four." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stubPath,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 2,
+    });
+
+    expect(results).toHaveLength(4);
+
+    // Process-level observation: the ceiling was reached, never exceeded.
+    const events = await readMarkerEvents(markerLogPath);
+    expect(events).toHaveLength(8);
+    expect(maxOverlap(events)).toBe(2);
+
+    // Every combo archived into its own destination with its own run.json.
+    for (const q of ["q-1", "q-2", "q-3", "q-4"]) {
+      const dirs = await listDir(join(sessionRoot, q, "model-alpha"));
+      expect(dirs).toHaveLength(1);
+      const runJson = JSON.parse(
+        await readFile(join(sessionRoot, q, "model-alpha", dirs[0], "run.json"), "utf-8")
+      ) as RunJson;
+      expect(runJson.question.name).toBe(q);
+      expect(runJson.status).toBe("ok");
+    }
+  });
+
+  it("never runs invocations of two different models concurrently", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-model-serial");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+        {
+          name: "model-beta",
+          provider: "llamacpp-local",
+          modelId: "beta.gguf",
+          params: { temp: 0.3 },
+        },
+      ],
+      [
+        { name: "q-1", intent: "Build page one." },
+        { name: "q-2", intent: "Build page two." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stubPath,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 2,
+    });
+
+    expect(results).toHaveLength(4);
+
+    // At no point in time is an invocation of each model open at once.
+    const events = await readMarkerEvents(markerLogPath);
+    expect(events).toHaveLength(8);
+    let openAlpha = 0;
+    let openBeta = 0;
+    let sawBeta = false;
+    for (const e of events) {
+      const delta = e.kind === "start" ? 1 : -1;
+      if (e.model.endsWith("/alpha.gguf")) openAlpha += delta;
+      else openBeta += delta;
+      expect(openAlpha === 0 || openBeta === 0).toBe(true);
+      if (openBeta > 0) sawBeta = true;
+    }
+    // Both models actually ran (guard against a vacuous pass).
+    expect(sawBeta).toBe(true);
+  });
+
+  it("keeps per-ticket invocations of one combo strictly sequential under concurrency", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-ticket-isolation");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-one", intent: "Build project one.", hasTickets: true },
+        { name: "q-two", intent: "Build project two.", hasTickets: true },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+    // Three tickets each → per-ticket flow (ADR 0007) in both combos.
+    const tickets =
+      "# Tickets\n\n[ ]1. Ticket number 1\n  - subtask\n[ ]2. Ticket number 2\n  - subtask\n[ ]3. Ticket number 3\n  - subtask\n";
+    await writeFile(join(fixtures.questionDir, "q-one", "tickets.md"), tickets, "utf-8");
+    await writeFile(join(fixtures.questionDir, "q-two", "tickets.md"), tickets, "utf-8");
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stubPath,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 2,
+    });
+
+    expect(results).toHaveLength(2);
+
+    // 2 combos × 3 ticket invocations = 6 invocations, each pair marked.
+    const events = await readMarkerEvents(markerLogPath);
+    expect(events).toHaveLength(12);
+
+    // The two combos (distinct workdirs) really did overlap …
+    expect(maxOverlap(events)).toBe(2);
+    // … but inside one combo (one workdir) invocations never overlap:
+    // tickets keep building on each other's workdir state (ADR 0007).
+    const workdirs = [...new Set(events.map((e) => e.workdir))];
+    expect(workdirs).toHaveLength(2);
+    for (const workdir of workdirs) {
+      expect(maxOverlap(events, (e) => e.workdir === workdir)).toBe(1);
+    }
+  });
+
+  it("is fully sequential by default (flag absent)", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-default-sequential");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-1", intent: "Build page one." },
+        { name: "q-2", intent: "Build page two." },
+        { name: "q-3", intent: "Build page three." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stubPath,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results).toHaveLength(3);
+    const events = await readMarkerEvents(markerLogPath);
+    expect(events).toHaveLength(6);
+    expect(maxOverlap(events)).toBe(1);
+  });
+
+  it("accepts a concurrency larger than the question count", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-oversized");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-1", intent: "Build page one." },
+        { name: "q-2", intent: "Build page two." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stubPath,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 99,
+    });
+
+    expect(results).toHaveLength(2);
+    const events = await readMarkerEvents(markerLogPath);
+    expect(maxOverlap(events)).toBe(2);
+  });
+
+  it("keeps index log START/END markers, SUMMARY, and progress overviews greppable under interleaving", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-index-interleaved");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-1", intent: "Build page one." },
+        { name: "q-2", intent: "Build page two." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    const indexLogPath = join(tempRoot, "pi-run-20990101-000003.log");
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stubPath,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 2,
+      indexLogPath,
+    });
+
+    expect(results).toHaveLength(2);
+
+    const content = await readFile(indexLogPath, "utf-8");
+    const ISO_PREFIX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z /;
+    for (const line of content.trimEnd().split("\n")) {
+      expect(line).toMatch(ISO_PREFIX);
+    }
+
+    // Every combo has exactly one START and one END marker, each naming
+    // its combo — greppable despite interleaved concurrent output.
+    for (const comboIndex of [1, 2]) {
+      expect(
+        content.match(new RegExp(`=== Combo ${comboIndex}/2 START: q-${comboIndex} × model-alpha`, "g"))
+      ).toHaveLength(1);
+    }
+    const endMatches = [
+      ...content.matchAll(
+        /=== Combo (\d)\/2 END: OK \([\d.]+s\) session: (.+session\.jsonl) ===/g
+      ),
+    ];
+    expect(endMatches).toHaveLength(2);
+    for (const m of endMatches) {
+      // The archived transcript named in the END marker exists.
+      expect(await readFile(m[2], "utf-8")).toContain("done");
+    }
+
+    // SUMMARY reflects all completions; one progress overview was
+    // rendered per combo completion (driven by completion, not iteration).
+    expect(content).toContain("=== SUMMARY: 2 combos, 0 failed");
+    expect(content.match(/\n[^\n]*Progress:\n/g)).toHaveLength(2);
+  });
+});
