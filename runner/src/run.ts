@@ -5,14 +5,19 @@ import {
   readdir,
   copyFile,
   rm,
+  stat,
 } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { join, resolve, sep, basename } from "node:path";
+import { join, resolve, sep, basename, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { setRunLogPath, runLog } from "./run-log";
-import { ResumeTracker } from "./resume";
+import {
+  ResumeTracker,
+  loadResumeFile,
+  type ResumeRemainingCombo,
+} from "./resume";
 import { loadConfig, loadRegistry, type RegistryModel } from "./registry";
 import { loadQuestions, type Question, type Ticket } from "./question";
 import {
@@ -22,11 +27,13 @@ import {
 } from "./prompt";
 import {
   setupWorkdir,
+  adoptWorkdir,
   runInvocation,
   sessionHasWriteToolErrors,
   parseVerdict,
   assertModelsAvailable,
   type PiEnvironment,
+  type WorkdirSetup,
 } from "./pi-runner";
 
 const log = (msg: string) => {
@@ -82,6 +89,14 @@ export interface RunMatrixOptions extends PiEnvironment {
    * of this value. Must be a positive integer.
    */
   concurrency?: number;
+  /**
+   * Resume mode (internal — set by resumeMatrix, never by the CLI's fresh
+   * run): execute exactly these remaining Combos instead of the full
+   * filtered plan, adopting each Combo's recorded in-flight state where
+   * present. Requires `resumeFilePath` to point at the same file the
+   * entries were loaded from, so the resumed Matrix keeps updating it.
+   */
+  resumeRemaining?: ResumeRemainingCombo[];
 }
 
 /**
@@ -418,6 +433,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     indexLogPath,
     resumeFilePath,
     concurrency = 1,
+    resumeRemaining,
   } = options;
 
   // Fail fast on an invalid concurrency: a typo discovered hours into the
@@ -460,14 +476,59 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   await assertModelsAvailable(piHome, filteredModels);
 
   // Pre-compute the full combo list for progress tracking
-  type ComboPlan = { model: typeof filteredModels[number]; question: typeof filteredQuestions[number]; comboId: string };
+  type ComboPlan = {
+    model: typeof filteredModels[number];
+    question: typeof filteredQuestions[number];
+    comboId: string;
+    /** In-flight state carried over from the Resume File (resume mode). */
+    adoptedRun?: {
+      runDir: string;
+      completedInvocations: InvocationRecord[];
+    };
+  };
   const comboPlan: ComboPlan[] = [];
   for (const model of filteredModels) {
     for (const question of filteredQuestions) {
       comboPlan.push({ model, question, comboId: computeComboId(question.name, model.name, model.params) });
     }
   }
-  const total = comboPlan.length;
+
+  // Resume mode: the file's `remaining` list — not the filtered plan —
+  // decides what executes. Archived Combos are absent from it by
+  // construction and are never retried: archived means completed, status
+  // ok or error alike. Entries are matched to plan Combos by question ×
+  // model identity; the recorded comboId is informational (registry
+  // params may have changed since the interruption) and the freshly
+  // computed id replaces it in the file from the first rewrite.
+  let execPlan = comboPlan;
+  if (resumeRemaining) {
+    if (!resumeFilePath) {
+      throw new Error(
+        "resumeRemaining requires resumeFilePath (the same file the entries were loaded from)"
+      );
+    }
+    const byIdentity = new Map(
+      comboPlan.map((c) => [`${c.question.name} × ${c.model.name}`, c])
+    );
+    execPlan = resumeRemaining.map((r) => {
+      const plan = byIdentity.get(`${r.questionName} × ${r.modelName}`);
+      if (!plan) {
+        throw new Error(
+          `Resume File Combo ${r.questionName} × ${r.modelName} is not part of the filtered Matrix — did the registry or questions change since the interruption?`
+        );
+      }
+      return {
+        ...plan,
+        adoptedRun: r.inFlight
+          ? {
+              runDir: r.inFlight.runDir,
+              completedInvocations: r.inFlight.completedInvocations,
+            }
+          : undefined,
+      };
+    });
+  }
+  const total = execPlan.length;
 
   // Resume File: created before the first Combo runs so interruption
   // protection exists from the start. Rewritten after every Combo
@@ -483,10 +544,19 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       })
     : null;
   await resume?.start(
-    comboPlan.map((c) => ({
+    execPlan.map((c) => ({
       questionName: c.question.name,
       modelName: c.model.name,
       comboId: c.comboId,
+      // Resume mode seeds the carried-over in-flight state, so the file on
+      // disk keeps pointing at the adopted run dir and its completed
+      // invocations from the first rewrite.
+      inFlight: c.adoptedRun
+        ? {
+            runDir: c.adoptedRun.runDir,
+            completedInvocations: c.adoptedRun.completedInvocations,
+          }
+        : undefined,
     }))
   );
 
@@ -517,19 +587,17 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     // simultaneously, pulled from the queue head in their original order.
     // All completion handling (outcomes, END markers, progress overview)
     // is driven by combo completion, not by loop iteration.
-    const queue = filteredQuestions.slice();
+    const queue = execPlan.filter((c) => c.model === model);
     // Set when any concurrent combo observes a terminal API failure: no
     // new combos are dequeued; in-flight combos finish and archive, then
     // the matrix aborts after the batch settles.
     let apiError: string | undefined;
 
-    const runOne = async (
-      question: (typeof filteredQuestions)[number]
-    ): Promise<void> => {
-      const comboId = computeComboId(question.name, model.name, model.params);
+    const runOne = async (plan: ComboPlan): Promise<void> => {
+      const { question, comboId } = plan;
       const startedAt = new Date().toISOString();
 
-      const comboIndex = comboPlan.findIndex((c) => c.comboId === comboId) + 1;
+      const comboIndex = execPlan.findIndex((c) => c.comboId === comboId) + 1;
       const label = `${question.name} × ${model.name}`;
 
       progress(`\n=== Combo ${comboIndex}/${total} ===`);
@@ -552,6 +620,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         piHome,
         piVersion,
         runRules,
+        adoptedRun: plan.adoptedRun,
         onRunDirReady: resume
           ? (runDir) => resume.comboStarted(comboId, runDir)
           : undefined,
@@ -586,7 +655,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
       // Print progress overview
       const lines = [`\nProgress:`];
-      for (const plan of comboPlan) {
+      for (const plan of execPlan) {
         if (completed.has(plan.comboId)) {
           const o = outcomes.find((r) => r.comboId === plan.comboId)!;
           const d = (o.durationMs / 1000).toFixed(1);
@@ -607,9 +676,9 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
       { length: Math.min(concurrency, queue.length) },
       async () => {
         while (!apiError) {
-          const question = queue.shift();
-          if (!question) return;
-          await runOne(question);
+          const plan = queue.shift();
+          if (!plan) return;
+          await runOne(plan);
         }
       }
     );
@@ -634,6 +703,71 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   // early and deliberately keeps it.)
   await resume?.finish();
   return outcomes;
+}
+
+/**
+ * Options for resuming an interrupted Matrix: the same execution
+ * environment as a fresh run, minus the settings the Resume File restores
+ * itself (filters, concurrency, its own path).
+ */
+export interface ResumeMatrixOptions extends PiEnvironment {
+  /** Path to the question directory containing question subdirectories. */
+  questionDir: string;
+  /** Path to the config.toml file. */
+  configPath: string;
+  /** Root directory where archived sessions are stored. */
+  sessionRoot: string;
+  /**
+   * Pi version re-detected for the new run's run.json records. The
+   * recorded version is not checked — resume never blocks on a version
+   * mismatch, it simply documents the version actually used now.
+   */
+  piVersion: string;
+  /** Global run rules injected into every prompt. */
+  runRules: string;
+  /** Optional path of the matrix index log (see run-log.ts). */
+  indexLogPath?: string;
+}
+
+/**
+ * Operator overrides for a resumed Matrix. Question/model filters come
+ * from the Resume File and are never re-narrowed.
+ */
+export interface ResumeMatrixOverrides {
+  /**
+   * Override the recorded Question-level Concurrency — the resume may
+   * happen on different hardware or a busier machine.
+   */
+  concurrency?: number;
+}
+
+/**
+ * Resume an interrupted Matrix from its Resume File (`resume` command).
+ *
+ * Loads and validates the file, restores the recorded filters and
+ * concurrency (overridable), and delegates to the same engine as a fresh
+ * run seeded with the file's remaining Combos and their in-flight state.
+ * The engine re-validates registry and questions against the recorded
+ * filters — unknown names fail fast exactly like a fresh run, before any
+ * Combo runs. The same file (same path, same id) keeps being updated
+ * during the resumed Matrix and is deleted on normal completion, so a
+ * second interruption is equally recoverable.
+ */
+export async function resumeMatrix(
+  resumeFilePath: string,
+  options: ResumeMatrixOptions,
+  overrides: ResumeMatrixOverrides = {}
+): Promise<RunComboOutcome[]> {
+  const file = await loadResumeFile(resumeFilePath);
+  const concurrency = overrides.concurrency ?? file.concurrency;
+  return runMatrix({
+    ...options,
+    questionFilter: file.questionFilter,
+    modelFilter: file.modelFilter,
+    concurrency,
+    resumeFilePath,
+    resumeRemaining: file.remaining,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -669,6 +803,17 @@ interface RunComboParams {
    * order, with the same record that goes into run.json's invocations.
    */
   onInvocationComplete?: (record: InvocationRecord) => void;
+  /**
+   * Resume state for an interrupted Combo: adopt the recorded run dir and
+   * carry the completed invocations into the new archive instead of
+   * re-running them. Ignored for single-invocation Combos (they always
+   * re-run whole) and when the recorded run dir is gone or unusable (the
+   * Combo degrades to a full re-run on a fresh workdir).
+   */
+  adoptedRun?: {
+    runDir: string;
+    completedInvocations: InvocationRecord[];
+  };
 }
 
 /**
@@ -700,6 +845,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
     runRules,
     onRunDirReady,
     onInvocationComplete,
+    adoptedRun,
   } = params;
 
   let status: "ok" | "error" = "ok";
@@ -721,7 +867,64 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
     // tickets.md parses into >= 2 tickets; otherwise the classic
     // single-invocation flow with an unchanged prompt.
     const perTicket = question.tickets.length >= 2;
-    const setup = await setupWorkdir(question, tempRoot);
+
+    // Resume: an interrupted Combo's recorded run dir is ADOPTED when it
+    // survives and every completed invocation's transcript is still in
+    // place — completed tickets are not re-run and their records and
+    // session files flow into the new archive. Single-invocation Combos
+    // have no useful in-flight state and always re-run whole; a missing
+    // or unusable run dir degrades the Combo to a full re-run.
+    let setup: WorkdirSetup | null = null;
+    let seededRecords: InvocationRecord[] = [];
+    let seededSessionFiles: string[] = [];
+    if (adoptedRun && perTicket) {
+      const candidate = await adoptWorkdir(adoptedRun.runDir);
+      let seeds: string[] | null = null;
+      if (candidate) {
+        seeds = [];
+        for (const record of adoptedRun.completedInvocations) {
+          const sessionId = record.evaluation
+            ? `t${record.ticket}-eval`
+            : `t${record.ticket}`;
+          const file = join(candidate.sessionDir, `${sessionId}.jsonl`);
+          try {
+            await stat(file);
+            seeds.push(file);
+          } catch {
+            // A recorded invocation without its transcript cannot flow
+            // into the archive — the run dir is unusable as a whole.
+            seeds = null;
+            break;
+          }
+        }
+      }
+      if (candidate && seeds) {
+        setup = candidate;
+        seededRecords = adoptedRun.completedInvocations;
+        seededSessionFiles = seeds;
+        // Every other transcript in the session dir is stale — above all
+        // the interrupted invocation's half-written file: delete them so
+        // they can neither leak into the archived transcript nor shadow a
+        // fresh invocation's output (runInvocation picks up only files
+        // that did not exist before the invocation).
+        for (const f of await readdir(candidate.sessionDir)) {
+          if (f.endsWith(".jsonl") && !seeds.includes(join(candidate.sessionDir, f))) {
+            await rm(join(candidate.sessionDir, f), { force: true });
+          }
+        }
+        log(
+          `resuming Combo ${label}: adopted run dir ${basename(candidate.runDir)}, ` +
+            `${seededRecords.length} completed invocation(s) carried over`
+        );
+      } else {
+        log(
+          `resuming Combo ${label}: recorded run dir is gone or unusable — falling back to a full re-run`
+        );
+      }
+    }
+    if (!setup) {
+      setup = await setupWorkdir(question, tempRoot);
+    }
     runLog(
       `=== Combo ${comboIndex}/${total} START: ${label} (${basename(setup.runDir)}) ===`
     );
@@ -737,10 +940,121 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       : [{ sessionId: "session", prompt: buildPrompt(question, runRules) }];
     log(`planned ${plan.length} invocation(s) for ${question.name}${perTicket ? " (per-ticket)" : ""}`);
 
-    const invocations: InvocationRecord[] = [];
-    const sessionFiles: string[] = [];
+    // Completed invocations carried over from the interrupted run seed
+    // both the new run.json's invocation list and the archived transcript
+    // concatenation; the Combo-level accumulators follow the last record.
+    const invocations: InvocationRecord[] = [...seededRecords];
+    const sessionFiles: string[] = [...seededSessionFiles];
+    if (seededRecords.length > 0) {
+      exitCode = seededRecords[seededRecords.length - 1].exitCode;
+      maxTurnsExceeded = seededRecords.some((r) => r.maxTurnsExceeded);
+    }
+
+    /**
+     * Arbitrate a dirty ticket invocation with an evaluation invocation
+     * (ADR 0007). Pushes the evaluation's record and transcript and
+     * returns false when the Combo must stop (terminal API failure or a
+     * verdict other than COMPLETE).
+     */
+    const arbitrateDirtyTicket = async (step: Planned): Promise<boolean> => {
+      const ticket = step.ticket!;
+      progress(`  → ${step.sessionId}-eval: evaluating ticket ${ticket.index}`);
+      const evalRes = await runInvocation({
+        prompt: buildEvaluationPrompt(question, ticket, plan.length),
+        workdir: setup!.workdir,
+        sessionDir: setup!.sessionDir,
+        sessionId: `${step.sessionId}-eval`,
+        extraArgs: setup!.extraArgs,
+        provider: model.provider,
+        modelId: model.modelId,
+        piBin,
+        piHome,
+        maxTurns: effectiveMaxTurns,
+      });
+
+      if (evalRes.sessionFile) sessionFiles.push(evalRes.sessionFile);
+      if (evalRes.maxTurnsExceeded) maxTurnsExceeded = true;
+
+      const evalToolErrors = evalRes.sessionFile
+        ? await sessionHasWriteToolErrors(evalRes.sessionFile)
+        : false;
+      const evalDirty =
+        evalRes.exitCode !== 0 || evalRes.maxTurnsExceeded || evalToolErrors;
+      // A crashed or killed evaluation, or a missing/unparseable
+      // verdict, is treated as INCOMPLETE (conservative abort).
+      // Failed tool results inside the evaluation do NOT invalidate
+      // an explicit verdict — the verdict marker is the evaluator's
+      // deliberate final answer (a benign isError must not discard it).
+      const verdict =
+        evalRes.exitCode !== 0 || evalRes.maxTurnsExceeded || !evalRes.sessionFile
+          ? null
+          : await parseVerdict(evalRes.sessionFile);
+
+      const evalRecord: InvocationRecord = {
+        ticket: ticket.index,
+        ticketTitle: ticket.title,
+        evaluation: true,
+        verdict,
+        dirty: evalDirty,
+        status: evalRes.exitCode === 0 && !evalRes.maxTurnsExceeded && !evalRes.apiError ? "ok" : "error",
+        exitCode: evalRes.exitCode,
+        maxTurnsExceeded: evalRes.maxTurnsExceeded,
+        apiError: evalRes.apiError ?? undefined,
+        durationMs: evalRes.durationMs,
+      };
+      invocations.push(evalRecord);
+      onInvocationComplete?.(evalRecord);
+
+      // Same infrastructure-failure rule as ticket invocations: an
+      // evaluation that died from an API failure says nothing about
+      // ticket completeness — abort the matrix, not just the run.
+      if (evalRes.apiError) {
+        progress(`  ✗ ${step.sessionId}-eval: terminal API failure (${evalRes.apiError})`);
+        status = "error";
+        apiError = evalRes.apiError;
+        return false;
+      }
+
+      if (verdict !== "complete") {
+        // Distinguish an explicit INCOMPLETE from a missing/unparseable
+        // verdict marker — the log must not misattribute the cause.
+        const reason = verdict === null
+          ? "no verdict marker found in evaluation (treated as INCOMPLETE)"
+          : "judged INCOMPLETE by evaluation";
+        progress(`  ✗ ticket ${ticket.index}: ${reason} — aborting run`);
+        status = "error";
+        return false;
+      }
+      progress(`  ✓ ticket ${ticket.index} judged complete despite dirty signals`);
+      return true;
+    };
 
     for (const step of plan) {
+      // Resume: invocations completed before the interruption are carried,
+      // never re-run. A ticket whose dirty main invocation completed but
+      // whose arbitration never finished still needs its evaluation.
+      if (seededRecords.length > 0 && step.ticket) {
+        const mainRecord = seededRecords.find(
+          (r) => r.ticket === step.ticket!.index && !r.evaluation
+        );
+        if (mainRecord) {
+          const evalRecord = seededRecords.find(
+            (r) => r.ticket === step.ticket!.index && r.evaluation
+          );
+          if (!mainRecord.dirty || evalRecord) {
+            progress(
+              `  ↷ ${step.sessionId}: ticket ${step.ticket.index} completed before the interruption — skipping`
+            );
+            continue;
+          }
+          if (!(await arbitrateDirtyTicket(step))) break;
+          continue;
+        }
+        progress(
+          `  → ${step.sessionId}: re-running the interrupted ticket from scratch in a fresh session`
+        );
+      }
+
       const stepLabel = step.ticket
         ? `ticket ${step.ticket.index}/${plan.length}: ${step.ticket.title}`
         : "single invocation";
@@ -801,74 +1115,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       if (dirty && step.ticket) {
         // Arbitrate: an evaluation invocation decides whether the ticket
         // was actually completed despite the dirty signals.
-        progress(`  → ${step.sessionId}-eval: evaluating ticket ${step.ticket.index}`);
-        const evalRes = await runInvocation({
-          prompt: buildEvaluationPrompt(question, step.ticket, plan.length),
-          workdir: setup.workdir,
-          sessionDir: setup.sessionDir,
-          sessionId: `${step.sessionId}-eval`,
-          extraArgs: setup.extraArgs,
-          provider: model.provider,
-          modelId: model.modelId,
-          piBin,
-          piHome,
-          maxTurns: effectiveMaxTurns,
-        });
-
-        if (evalRes.sessionFile) sessionFiles.push(evalRes.sessionFile);
-        if (evalRes.maxTurnsExceeded) maxTurnsExceeded = true;
-
-        const evalToolErrors = evalRes.sessionFile
-          ? await sessionHasWriteToolErrors(evalRes.sessionFile)
-          : false;
-        const evalDirty =
-          evalRes.exitCode !== 0 || evalRes.maxTurnsExceeded || evalToolErrors;
-        // A crashed or killed evaluation, or a missing/unparseable
-        // verdict, is treated as INCOMPLETE (conservative abort).
-        // Failed tool results inside the evaluation do NOT invalidate
-        // an explicit verdict — the verdict marker is the evaluator's
-        // deliberate final answer (a benign isError must not discard it).
-        const verdict =
-          evalRes.exitCode !== 0 || evalRes.maxTurnsExceeded || !evalRes.sessionFile
-            ? null
-            : await parseVerdict(evalRes.sessionFile);
-
-        const evalRecord: InvocationRecord = {
-          ticket: step.ticket.index,
-          ticketTitle: step.ticket.title,
-          evaluation: true,
-          verdict,
-          dirty: evalDirty,
-          status: evalRes.exitCode === 0 && !evalRes.maxTurnsExceeded && !evalRes.apiError ? "ok" : "error",
-          exitCode: evalRes.exitCode,
-          maxTurnsExceeded: evalRes.maxTurnsExceeded,
-          apiError: evalRes.apiError ?? undefined,
-          durationMs: evalRes.durationMs,
-        };
-        invocations.push(evalRecord);
-        onInvocationComplete?.(evalRecord);
-
-        // Same infrastructure-failure rule as ticket invocations: an
-        // evaluation that died from an API failure says nothing about
-        // ticket completeness — abort the matrix, not just the run.
-        if (evalRes.apiError) {
-          progress(`  ✗ ${step.sessionId}-eval: terminal API failure (${evalRes.apiError})`);
-          status = "error";
-          apiError = evalRes.apiError;
-          break;
-        }
-
-        if (verdict !== "complete") {
-          // Distinguish an explicit INCOMPLETE from a missing/unparseable
-          // verdict marker — the log must not misattribute the cause.
-          const reason = verdict === null
-            ? "no verdict marker found in evaluation (treated as INCOMPLETE)"
-            : "judged INCOMPLETE by evaluation";
-          progress(`  ✗ ticket ${step.ticket.index}: ${reason} — aborting run`);
-          status = "error";
-          break;
-        }
-        progress(`  ✓ ticket ${step.ticket.index} judged complete despite dirty signals`);
+        if (!(await arbitrateDirtyTicket(step))) break;
       }
     }
 
@@ -1008,94 +1255,10 @@ async function detectPiVersion(piBin: string): Promise<string> {
   }
 }
 
-if (import.meta.main) {
-  const args = process.argv.slice(2);
-
-  // Parse CLI arguments
-  let questionFilter: string[] | undefined;
-  let modelFilter: string[] | undefined;
-  let concurrency: number | undefined;
-
-  for (let i = 0; i < args.length; i++) {
-    switch (args[i]) {
-      case "--question":
-        questionFilter = parseFilter(args[++i]);
-        break;
-      case "--model":
-        modelFilter = parseFilter(args[++i]);
-        break;
-      case "--concurrency": {
-        // Question-level concurrency within one model; default 1. Invalid
-        // values abort at startup — a typo must not surface hours in.
-        const raw = args[++i];
-        const parsed = raw === undefined ? NaN : Number(raw);
-        if (!Number.isInteger(parsed) || parsed < 1) {
-          console.error(
-            `error: --concurrency must be a positive integer (got "${raw}")`
-          );
-          process.exit(1);
-        }
-        concurrency = parsed;
-        break;
-      }
-    }
-  }
-
-  // Determine repo root (parent of runner/)
-  const repoRoot = resolve(__dirname, "..", "..");
-  const piBin = join(repoRoot, "runner", "node_modules", ".bin", "pi");
-
-  // Load runner config
-  const configPath = join(repoRoot, "runner", "config.toml");
-  const config = await loadConfig(configPath);
-
-  // One timestamp id per matrix execution, shared by the index log and
-  // the Resume File so log and resume state pair up naturally. Both live
-  // in the current working directory (see run-log.ts and resume.ts).
-  const matrixTimestamp = formatTimestamp(new Date());
-  const indexLogPath = join(
-    process.cwd(),
-    `pi-run-${matrixTimestamp}.log`
-  );
-  const resumeFilePath = join(
-    process.cwd(),
-    `matrix-resume-${matrixTimestamp}.json`
-  );
-  setRunLogPath(indexLogPath);
-  log(`writing index log: ${indexLogPath}`);
-  log(`writing Resume File: ${resumeFilePath}`);
-
-  // Run the matrix with defaults
-  let outcomes: RunComboOutcome[];
-  try {
-    outcomes = await runMatrix({
-      questionDir: join(repoRoot, "question"),
-      configPath,
-      sessionRoot: join(repoRoot, "session"),
-      piBin,
-      piHome: join(repoRoot, ".pi-home"),
-      tempRoot: join(tmpdir(), "llm-interview-runs"),
-      questionFilter,
-      modelFilter,
-      concurrency,
-      maxTurns: config.maxTurns,
-      runRules: config.runRules,
-      indexLogPath,
-      resumeFilePath,
-      piVersion: await detectPiVersion(piBin).then((v) => {
-        log(`pi --version => ${v}`);
-        return v;
-      }),
-    });
-  } catch (err) {
-    // Startup failures (unknown model id, isolation guard, ...) abort before
-    // any combo runs — leave a trace in the index log.
-    const message = err instanceof Error ? err.message : String(err);
-    runLog(`=== MATRIX FAILED: ${message} ===`);
-    throw err;
-  }
-
-  // Print per-combo status table
+/**
+ * Print the per-combo status table and exit non-zero on any failure.
+ */
+function printOutcomes(outcomes: RunComboOutcome[]): void {
   console.log("\n=== Run Matrix Results ===\n");
   console.log(
     ["Question", "Model", "Status", "Exit", "Duration", "ComboId"].join("\t")
@@ -1117,4 +1280,167 @@ if (import.meta.main) {
     console.log(`Failures: ${failures}`);
     process.exit(1);
   }
+}
+
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+
+  // One positional subcommand, `resume <path>`: recovery is a deliberate
+  // act that can never happen by accident. Everything else stays
+  // flag-based.
+  const isResume = args[0] === "resume";
+  const flagArgs = isResume ? args.slice(1) : args;
+  let resumePath: string | undefined;
+  if (isResume) {
+    resumePath =
+      flagArgs[0] && !flagArgs[0].startsWith("--") ? flagArgs.shift() : undefined;
+    if (!resumePath) {
+      console.error(
+        "usage: bun run run.ts resume <resume-file> [--concurrency N]"
+      );
+      process.exit(1);
+    }
+  }
+
+  // Parse CLI arguments
+  let questionFilter: string[] | undefined;
+  let modelFilter: string[] | undefined;
+  let concurrency: number | undefined;
+
+  for (let i = 0; i < flagArgs.length; i++) {
+    switch (flagArgs[i]) {
+      case "--question":
+        questionFilter = parseFilter(flagArgs[++i]);
+        break;
+      case "--model":
+        modelFilter = parseFilter(flagArgs[++i]);
+        break;
+      case "--concurrency": {
+        // Question-level concurrency within one model; default 1. Invalid
+        // values abort at startup — a typo must not surface hours in.
+        const raw = flagArgs[++i];
+        const parsed = raw === undefined ? NaN : Number(raw);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          console.error(
+            `error: --concurrency must be a positive integer (got "${raw}")`
+          );
+          process.exit(1);
+        }
+        concurrency = parsed;
+        break;
+      }
+    }
+  }
+
+  // The Resume File restores the recorded filters automatically; letting
+  // the operator re-narrow them would silently change the original intent.
+  if (isResume && (questionFilter || modelFilter)) {
+    console.error(
+      "error: resume restores the recorded filters from the Resume File; --question/--model are not accepted"
+    );
+    process.exit(1);
+  }
+
+  // Determine repo root (parent of runner/)
+  const repoRoot = resolve(__dirname, "..", "..");
+  const piBin = join(repoRoot, "runner", "node_modules", ".bin", "pi");
+
+  // Load runner config
+  const configPath = join(repoRoot, "runner", "config.toml");
+  const config = await loadConfig(configPath);
+
+  const sharedOptions = {
+    questionDir: join(repoRoot, "question"),
+    configPath,
+    sessionRoot: join(repoRoot, "session"),
+    piBin,
+    piHome: join(repoRoot, ".pi-home"),
+    tempRoot: join(tmpdir(), "llm-interview-runs"),
+    maxTurns: config.maxTurns,
+    runRules: config.runRules,
+  };
+
+  let outcomes: RunComboOutcome[];
+  if (isResume) {
+    const resolvedResumePath = resolve(resumePath!);
+    // Pair the resumed run's index log with the Resume File it continues:
+    // same timestamp id, same directory (pi-run-<ts>.log pairs with
+    // matrix-resume-<ts>.json), so log and resume state stay together
+    // across the interruption. A file named otherwise gets a fresh
+    // timestamped log in the cwd.
+    const nameMatch = basename(resolvedResumePath).match(
+      /^matrix-resume-(.+)\.json$/
+    );
+    const indexLogPath = nameMatch
+      ? join(dirname(resolvedResumePath), `pi-run-${nameMatch[1]}.log`)
+      : join(process.cwd(), `pi-run-${formatTimestamp(new Date())}.log`);
+    setRunLogPath(indexLogPath);
+    log(`writing index log: ${indexLogPath}`);
+    log(`resuming from Resume File: ${resolvedResumePath}`);
+
+    try {
+      outcomes = await resumeMatrix(
+        resolvedResumePath,
+        {
+          ...sharedOptions,
+          indexLogPath,
+          // The pi version is re-detected for the new run's run.json
+          // records — resume never blocks on a version mismatch.
+          piVersion: await detectPiVersion(piBin).then((v) => {
+            log(`pi --version => ${v}`);
+            return v;
+          }),
+        },
+        { concurrency }
+      );
+    } catch (err) {
+      // A missing/invalid Resume File or a startup failure (unknown model
+      // id, isolation guard, ...) aborts before any combo runs — report
+      // cleanly and leave a trace in the index log.
+      const message = err instanceof Error ? err.message : String(err);
+      runLog(`=== MATRIX FAILED: ${message} ===`);
+      console.error(`error: ${message}`);
+      process.exit(1);
+    }
+  } else {
+    // One timestamp id per matrix execution, shared by the index log and
+    // the Resume File so log and resume state pair up naturally. Both live
+    // in the current working directory (see run-log.ts and resume.ts).
+    const matrixTimestamp = formatTimestamp(new Date());
+    const indexLogPath = join(
+      process.cwd(),
+      `pi-run-${matrixTimestamp}.log`
+    );
+    const resumeFilePath = join(
+      process.cwd(),
+      `matrix-resume-${matrixTimestamp}.json`
+    );
+    setRunLogPath(indexLogPath);
+    log(`writing index log: ${indexLogPath}`);
+    log(`writing Resume File: ${resumeFilePath}`);
+
+    // Run the matrix with defaults
+    try {
+      outcomes = await runMatrix({
+        ...sharedOptions,
+        questionFilter,
+        modelFilter,
+        concurrency,
+        indexLogPath,
+        resumeFilePath,
+        piVersion: await detectPiVersion(piBin).then((v) => {
+          log(`pi --version => ${v}`);
+          return v;
+        }),
+      });
+    } catch (err) {
+      // Startup failures (unknown model id, isolation guard, ...) abort before
+      // any combo runs — leave a trace in the index log.
+      const message = err instanceof Error ? err.message : String(err);
+      runLog(`=== MATRIX FAILED: ${message} ===`);
+      throw err;
+    }
+  }
+
+  printOutcomes(outcomes);
 }

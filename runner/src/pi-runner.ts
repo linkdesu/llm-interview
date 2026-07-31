@@ -280,6 +280,32 @@ export interface WorkdirSetup {
 }
 
 /**
+ * Link the chrome-devtools-axi skill into a workdir for HTML page testing.
+ * Returns the extra pi arguments to use ([] when the skill is
+ * unavailable). Idempotent: an already-linked workdir (adopted during a
+ * resume) keeps its existing link.
+ */
+async function linkChromeDevToolsSkill(workdir: string): Promise<string[]> {
+  const skillsDir = join(workdir, ".skills");
+  const chromeDevToolsSkillSrc = join(homedir(), ".agents", "skills", "chrome-devtools-axi", "SKILL.md");
+  const chromeDevToolsSkillDst = join(skillsDir, "chrome-devtools-axi", "SKILL.md");
+  try {
+    await mkdir(join(skillsDir, "chrome-devtools-axi"), { recursive: true });
+    try {
+      await symlink(chromeDevToolsSkillSrc, chromeDevToolsSkillDst);
+    } catch (err) {
+      // Already linked (adopted workdir) — keep the existing link.
+      if ((err as NodeJS.ErrnoException)?.code !== "EEXIST") throw err;
+    }
+    log(`linked chrome-devtools-axi skill`);
+    return ["--skill", chromeDevToolsSkillDst];
+  } catch {
+    log(`chrome-devtools-axi skill not available, skipping`);
+    return [];
+  }
+}
+
+/**
  * Create an isolated working directory under tempRoot and prepare it:
  * copies spec.md / tickets.md from the question directory when present and
  * links the chrome-devtools-axi skill for HTML page verification.
@@ -314,20 +340,34 @@ export async function setupWorkdir(
     log(`copied tickets.md to workdir`);
   }
 
-  // Link chrome-devtools-axi skill into workdir for HTML page testing
-  const skillsDir = join(workdir, ".skills");
-  const chromeDevToolsSkillSrc = join(homedir(), ".agents", "skills", "chrome-devtools-axi", "SKILL.md");
-  const chromeDevToolsSkillDst = join(skillsDir, "chrome-devtools-axi", "SKILL.md");
-  let extraArgs: string[] = [];
-  try {
-    await mkdir(join(skillsDir, "chrome-devtools-axi"), { recursive: true });
-    await symlink(chromeDevToolsSkillSrc, chromeDevToolsSkillDst);
-    extraArgs = ["--skill", chromeDevToolsSkillDst];
-    log(`linked chrome-devtools-axi skill`);
-  } catch {
-    log(`chrome-devtools-axi skill not available, skipping`);
-  }
+  const extraArgs = await linkChromeDevToolsSkill(workdir);
 
+  return { runDir, workdir, sessionDir, extraArgs };
+}
+
+/**
+ * Adopt a surviving run dir from an interrupted Matrix (resume) instead of
+ * creating a fresh one: keeps the workdir's files (the completed tickets'
+ * work every later ticket builds on) and the session dir's transcripts
+ * (the completed invocations' records that flow into the new archive).
+ * Question files and the skill link are already inside from the original
+ * setup. Returns null when the recorded dir is gone or lacks the expected
+ * layout (temp cleanup, reboot) — the caller then degrades to a fresh
+ * setup and a full re-run.
+ */
+export async function adoptWorkdir(
+  runDir: string
+): Promise<WorkdirSetup | null> {
+  const workdir = join(runDir, "work");
+  const sessionDir = join(runDir, "sessions");
+  try {
+    if (!(await stat(workdir)).isDirectory()) return null;
+    if (!(await stat(sessionDir)).isDirectory()) return null;
+  } catch {
+    return null;
+  }
+  const extraArgs = await linkChromeDevToolsSkill(workdir);
+  log(`adopted existing run dir: ${runDir}`);
   return { runDir, workdir, sessionDir, extraArgs };
 }
 

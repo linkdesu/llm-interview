@@ -1,4 +1,4 @@
-import { writeFile, rename, rm } from "node:fs/promises";
+import { readFile, writeFile, rename, rm } from "node:fs/promises";
 import { runLog } from "./run-log";
 import type { InvocationRecord } from "./run";
 
@@ -73,10 +73,11 @@ export class ResumeTracker {
   /**
    * Create the Resume File with every planned Combo in `remaining`.
    * Awaited by the caller so the file exists before the first Combo runs.
+   * A resumed Matrix seeds the entries it loaded from the file — including
+   * their in-flight state — so the carried-over completed invocations stay
+   * on record from the first rewrite.
    */
-  async start(
-    combos: Array<{ questionName: string; modelName: string; comboId: string }>
-  ): Promise<void> {
+  async start(combos: ResumeRemainingCombo[]): Promise<void> {
     for (const combo of combos) {
       this.remaining.set(combo.comboId, { ...combo });
     }
@@ -92,7 +93,13 @@ export class ResumeTracker {
   comboStarted(comboId: string, runDir: string): void {
     const combo = this.remaining.get(comboId);
     if (!combo) return;
-    combo.inFlight = { runDir, completedInvocations: [] };
+    // A resumed Combo adopting its recorded run dir keeps the carried-over
+    // completed invocations; a fresh run dir (new Matrix, or a degraded
+    // re-run after the recorded dir vanished) starts the record over — the
+    // old invocations' transcripts live in a dir this run will not use.
+    const completedInvocations =
+      combo.inFlight?.runDir === runDir ? combo.inFlight.completedInvocations : [];
+    combo.inFlight = { runDir, completedInvocations };
     this.enqueueRewrite();
   }
 
@@ -161,4 +168,66 @@ export class ResumeTracker {
       runLog(`[matrix] failed to rewrite Resume File ${this.filePath}: ${err}`);
     }
   }
+}
+
+/**
+ * Load and validate a Resume File for the `resume` command. Resume is a
+ * deliberate act: a missing, unparseable, or malformed file — or one from
+ * an unknown schema version — must fail with a clear error before anything
+ * runs, never start a half-valid Matrix.
+ */
+export async function loadResumeFile(
+  filePath: string
+): Promise<MatrixResumeFile> {
+  let raw: string;
+  try {
+    raw = await readFile(filePath, "utf-8");
+  } catch (err) {
+    throw new Error(
+      `Cannot load Resume File ${filePath}: ${(err as Error).message}`,
+      { cause: err }
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`Cannot load Resume File ${filePath}: not valid JSON`, {
+      cause: err,
+    });
+  }
+  const fail = (reason: string): never => {
+    throw new Error(`Cannot load Resume File ${filePath}: ${reason}`);
+  };
+  if (typeof parsed !== "object" || parsed === null) fail("not an object");
+  const file = parsed as MatrixResumeFile;
+  if (file.version !== 1) {
+    fail(
+      `unsupported Resume File version ${JSON.stringify(
+        (parsed as { version?: unknown }).version
+      )} (expected 1)`
+    );
+  }
+  if (!Number.isInteger(file.concurrency) || file.concurrency < 1) {
+    fail(`invalid concurrency ${JSON.stringify(file.concurrency)}`);
+  }
+  if (typeof file.piVersion !== "string") fail("missing piVersion");
+  if (!Array.isArray(file.remaining)) fail("missing remaining Combo list");
+  for (const combo of file.remaining) {
+    if (
+      typeof combo?.questionName !== "string" ||
+      typeof combo?.modelName !== "string" ||
+      typeof combo?.comboId !== "string"
+    ) {
+      fail("malformed remaining Combo entry");
+    }
+    if (
+      combo.inFlight !== undefined &&
+      (typeof combo.inFlight.runDir !== "string" ||
+        !Array.isArray(combo.inFlight.completedInvocations))
+    ) {
+      fail(`malformed in-flight state for Combo ${combo.comboId}`);
+    }
+  }
+  return file;
 }
