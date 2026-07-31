@@ -13,10 +13,12 @@ import {
   rm,
   chmod,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
+import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import type { RunJson } from "./run";
+import type { MatrixResumeFile } from "./resume";
 
 // ---------------------------------------------------------------------------
 // Helper: create a temp root for each test suite
@@ -2277,4 +2279,590 @@ describe("runMatrix concurrency", () => {
     // q-3-later never started.
     expect(content).not.toContain("START: q-3-later");
   });
+});
+
+// ---------------------------------------------------------------------------
+// Resume File lifecycle (schema v1): created before the first Combo runs,
+// atomically rewritten (write-temp-then-rename) as Combos and invocations
+// complete, deleted on normal Matrix completion. Kill-level interruption
+// (kill -9) cannot be simulated in-process, so those tests drive runMatrix
+// in a child process and SIGKILL it.
+// ---------------------------------------------------------------------------
+
+/**
+ * A stub pi that announces each invocation with a `waiting-<key>` marker in
+ * the gate dir and blocks until the matching `gate-<key>` file appears
+ * (bounded, so orphaned stubs after a kill eventually exit). The key is
+ * `<runDir basename>-<session id>` — unique per Combo per invocation.
+ */
+async function createGatedStubPi(stubPath: string, gateDir: string) {
+  const script = `#!/usr/bin/env bash
+# Stub pi whose invocations proceed only when the test opens their gate
+GATE_DIR="${gateDir}"
+SESSION_DIR=""
+SESSION_ID=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    --session-id) SESSION_ID="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+KEY="$(basename "$(dirname "$SESSION_DIR")")-$SESSION_ID"
+touch "$GATE_DIR/waiting-$KEY"
+n=0
+while [ ! -f "$GATE_DIR/gate-$KEY" ]; do
+  n=$((n+1))
+  if [ "$n" -gt 900 ]; then exit 1; fi
+  sleep 0.05
+done
+echo '${CLEAN_SESSION}' > "$SESSION_DIR/session.jsonl"
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+exit 0
+`;
+  await writeFile(stubPath, script, "utf-8");
+  await chmod(stubPath, 0o755);
+}
+
+/**
+ * Write a repo fixture with one model and the given questions, each with a
+ * tickets.md parsing into `ticketCount` tickets.
+ */
+async function writeTicketedMatrixFixtures(
+  repoDir: string,
+  questionNames: string[],
+  ticketCount: number
+): Promise<{ configPath: string; questionDir: string; sessionRoot: string }> {
+  const configPath = join(repoDir, "config.toml");
+  await writeFile(
+    configPath,
+    `max_turns = 100\nrun_rules = ""\n\n[[models]]\nname = "model-alpha"\nprovider = "llamacpp-local"\nmodelId = "alpha.gguf"\n[models.params]\ntemp = 0.7\n`,
+    "utf-8"
+  );
+  const questionDir = join(repoDir, "questions");
+  for (const name of questionNames) {
+    const qDir = join(questionDir, name);
+    await mkdir(qDir, { recursive: true });
+    await writeFile(join(qDir, "intent.md"), `Build ${name}.`, "utf-8");
+    const ticketLines = Array.from(
+      { length: ticketCount },
+      (_, i) => `[ ]${i + 1}. Ticket number ${i + 1}\n  - subtask`
+    ).join("\n");
+    await writeFile(join(qDir, "tickets.md"), `# Tickets\n\n${ticketLines}\n`, "utf-8");
+  }
+  return { configPath, questionDir, sessionRoot: join(repoDir, "session") };
+}
+
+/**
+ * Poll an external condition (files written by stub pi processes, the
+ * Resume File rewritten asynchronously) until it holds. A real poll
+ * interval is required here: the condition is produced outside this
+ * process's control flow, so there is no internal promise/event to await
+ * and fake timers cannot observe the change. Bounded; fails on timeout.
+ */
+async function waitFor(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs = 15000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await condition()) return;
+    await Bun.sleep(20);
+  }
+  throw new Error("waitFor: condition not met within timeout");
+}
+
+/** Parse the Resume File, or null when it does not exist / is momentarily absent. */
+async function readResumeFile(path: string): Promise<MatrixResumeFile | null> {
+  try {
+    return JSON.parse(await readFile(path, "utf-8")) as MatrixResumeFile;
+  } catch {
+    return null;
+  }
+}
+
+/** Open every waiting gate matching the filter (default: all of them). */
+async function openWaitingGates(
+  gateDir: string,
+  filter: (marker: string) => boolean = () => true
+): Promise<void> {
+  for (const marker of await listDir(gateDir)) {
+    if (marker.startsWith("waiting-") && filter(marker)) {
+      await writeFile(
+        join(gateDir, marker.replace("waiting-", "gate-")),
+        "",
+        "utf-8"
+      );
+    }
+  }
+}
+
+/**
+ * Write the tiny driver the kill tests spawn as a child process: it calls
+ * runMatrix with fixture paths from argv. Kill-level interruption
+ * (kill -9) cannot be simulated in-process — the same process being killed
+ * must be the one maintaining the Resume File.
+ */
+async function writeResumeDriver(driverPath: string): Promise<void> {
+  const runModuleUrl = pathToFileURL(join(import.meta.dir, "run.ts")).href;
+  const source = `import { runMatrix } from ${JSON.stringify(runModuleUrl)};
+
+const [
+  questionDir,
+  configPath,
+  sessionRoot,
+  tempRoot,
+  piBin,
+  piHome,
+  resumeFilePath,
+  concurrencyRaw,
+] = process.argv.slice(2);
+
+await runMatrix({
+  questionDir,
+  configPath,
+  sessionRoot,
+  tempRoot,
+  piBin,
+  piHome,
+  resumeFilePath,
+  concurrency: Number(concurrencyRaw),
+  piVersion: "test-1.0",
+  maxTurns: 100,
+  runRules: "",
+});
+`;
+  await writeFile(driverPath, source, "utf-8");
+}
+
+/** Find the remaining Combo a waiting-gate marker belongs to (by run dir). */
+function comboForMarker(
+  marker: string,
+  resume: MatrixResumeFile
+): MatrixResumeFile["remaining"][number] | undefined {
+  const runKey = marker
+    .slice("waiting-".length)
+    .replace(/-t\d+(-eval)?$/, "");
+  return resume.remaining.find((r) => r.inFlight?.runDir.endsWith(runKey));
+}
+
+/**
+ * Drive the gated stub pi in the child process: as invocations announce
+ * themselves, open their gates only when `mayOpen` allows, until the Resume
+ * File satisfies `stop`. Returns the file content that satisfied it.
+ */
+async function pumpGatesUntil(opts: {
+  gateDir: string;
+  resumeFilePath: string;
+  mayOpen: (marker: string, resume: MatrixResumeFile) => boolean;
+  stop: (resume: MatrixResumeFile) => boolean;
+}): Promise<MatrixResumeFile> {
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    const resume = await readResumeFile(opts.resumeFilePath);
+    if (resume) {
+      if (opts.stop(resume)) return resume;
+      await openWaitingGates(opts.gateDir, (marker) =>
+        opts.mayOpen(marker, resume)
+      );
+    }
+    await Bun.sleep(30);
+  }
+  throw new Error("pumpGatesUntil: stop condition not met within timeout");
+}
+
+describe("runMatrix Resume File", () => {
+  let tempRoot: string;
+  let piHome: string;
+  let runTempRoot: string;
+  let gateDir: string;
+
+  beforeEach(async () => {
+    tempRoot = makeTempRoot();
+    await mkdir(tempRoot, { recursive: true });
+    piHome = join(tempRoot, ".pi-home");
+    runTempRoot = join(tempRoot, "runs");
+    await mkdir(runTempRoot, { recursive: true });
+    gateDir = join(tempRoot, "gates");
+    await mkdir(gateDir, { recursive: true });
+  });
+
+  afterAll(async () => {
+    try {
+      await rm(tempRoot, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  it("exists before the first Combo runs and reflects exactly the Combos still needing work after every completion", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-lifecycle");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeTicketedMatrixFixtures(repoDir, ["q-1", "q-2"], 2);
+    const stub = join(tempRoot, "stub-pi-gated");
+    await createGatedStubPi(stub, gateDir);
+    const resumeFilePath = join(tempRoot, "matrix-resume-20990101-000000.json");
+
+    const runPromise = runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot: fixtures.sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      resumeFilePath,
+    });
+
+    // The file exists from the very start of the Matrix...
+    await waitFor(async () => (await readResumeFile(resumeFilePath)) !== null);
+    // ...and once the first Combo is in flight (its first invocation is
+    // gated), it still lists every planned Combo — interruption protection
+    // exists from the first Combo.
+    await waitFor(async () =>
+      (await listDir(gateDir)).some((f) => f.startsWith("waiting-"))
+    );
+    const initial = (await readResumeFile(resumeFilePath))!;
+    expect(initial.version).toBe(1);
+    expect(initial.remaining.map((r) => r.questionName)).toEqual(["q-1", "q-2"]);
+
+    // Let the first Combo finish: the rewrite drops exactly that Combo.
+    await waitFor(async () => {
+      await openWaitingGates(gateDir);
+      return (await readResumeFile(resumeFilePath))?.remaining.length === 1;
+    });
+    const afterFirst = (await readResumeFile(resumeFilePath))!;
+    expect(afterFirst.remaining.map((r) => r.questionName)).toEqual(["q-2"]);
+
+    // Let the second Combo finish; a normally finished Matrix deletes the file.
+    await waitFor(async () => {
+      await openWaitingGates(gateDir);
+      return (await readResumeFile(resumeFilePath)) === null;
+    });
+    const results = await runPromise;
+    expect(results).toHaveLength(2);
+  }, 30000);
+
+  it("deletes the Resume File when the Matrix finishes normally, leaving no temp files behind", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-normal-finish");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeTicketedMatrixFixtures(repoDir, ["q-1", "q-2"], 2);
+    const stub = join(tempRoot, "stub-pi-fast");
+    await createMarkerStubPi(stub, join(tempRoot, "markers.log"), 0.1);
+    const resumeFilePath = join(tempRoot, "matrix-resume-20990101-000001.json");
+
+    const runPromise = runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot: fixtures.sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      resumeFilePath,
+    });
+
+    // Guard against a vacuous deletion assertion: the file must have
+    // existed while the Matrix was running.
+    await waitFor(async () => (await readResumeFile(resumeFilePath)) !== null);
+
+    const results = await runPromise;
+    expect(results).toHaveLength(2);
+
+    // Neither the Resume File nor a leftover temp sibling survives a normal finish.
+    expect(
+      (await listDir(tempRoot)).filter((f) => f.startsWith("matrix-resume-"))
+    ).toEqual([]);
+  }, 30000);
+
+  it("records the original filters, concurrency, and pi version, and an aborted Matrix keeps the file listing the Combos that never ran", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-abort-keeps-file");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-1-sibling", intent: "Build page one." },
+        { name: "q-2-failing", intent: "Build the page that hits a terminal API failure." },
+        { name: "q-3-later", intent: "Build page three." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    // q-2-failing dies immediately from a terminal API failure while its
+    // sibling q-1-sibling is still in flight (sleeping): the batch drains,
+    // then the Matrix aborts without starting q-3-later.
+    const markerLogPath = join(tempRoot, "markers.log");
+    const stub = join(tempRoot, "stub-api-drain-resume");
+    await createDrainStubPi(stub, markerLogPath, "terminal API failure", 0.4);
+    const resumeFilePath = join(tempRoot, "matrix-resume-20990101-000002.json");
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 2,
+      questionFilter: ["q-1-sibling", "q-2-failing", "q-3-later"],
+      modelFilter: ["alpha.gguf"],
+      resumeFilePath,
+    });
+
+    // The Matrix aborted after draining the in-flight batch.
+    expect(results).toHaveLength(2);
+
+    // The file survives the abort, self-contained: original filters,
+    // concurrency, and pi version — everything resume needs to restore the
+    // original intent without re-specifying flags.
+    const resume = (await readResumeFile(resumeFilePath))!;
+    expect(resume).not.toBeNull();
+    expect(resume.version).toBe(1);
+    expect(resume.concurrency).toBe(2);
+    expect(resume.piVersion).toBe("test-1.0");
+    expect(resume.questionFilter).toEqual(["q-1-sibling", "q-2-failing", "q-3-later"]);
+    expect(resume.modelFilter).toEqual(["alpha.gguf"]);
+
+    // Both drained Combos left `remaining` once archived — q-2-failing
+    // included, despite its error status: archived means completed. Only
+    // the Combo that never ran is left, with no in-flight state.
+    expect(resume.remaining.map((r) => r.questionName)).toEqual(["q-3-later"]);
+    expect(resume.remaining[0].modelName).toBe("model-alpha");
+    expect(resume.remaining[0].comboId).toMatch(/^[0-9a-f]{12}$/);
+    expect(resume.remaining[0].inFlight).toBeUndefined();
+  }, 30000);
+
+  it("leaves the interrupted Combo's surviving runDir and completed invocations in the file when the Matrix is killed mid-Combo", async () => {
+    const repoDir = join(tempRoot, "repo-killed-mid-combo");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeTicketedMatrixFixtures(repoDir, ["q-1", "q-2"], 3);
+    const stub = join(tempRoot, "stub-pi-gated-kill");
+    await createGatedStubPi(stub, gateDir);
+    const driverPath = join(tempRoot, "resume-driver.ts");
+    await writeResumeDriver(driverPath);
+    const resumeFilePath = join(tempRoot, "matrix-resume-20990101-000003.json");
+
+    // runMatrix in a CHILD process: kill -9 semantics are only honest when
+    // the killed process is the one maintaining the Resume File.
+    const proc = Bun.spawn(
+      [
+        "bun",
+        driverPath,
+        fixtures.questionDir,
+        fixtures.configPath,
+        fixtures.sessionRoot,
+        runTempRoot,
+        stub,
+        piHome,
+        resumeFilePath,
+        "1",
+      ],
+      { env: { ...process.env, NODE_ENV: "test" }, stdout: "pipe", stderr: "pipe" }
+    );
+
+    // q-1 runs to completion (its gates open as they appear); for q-2 only
+    // the first ticket may complete — the Matrix is then killed with q-2's
+    // second ticket in flight. Gates open only once the Resume File
+    // positively tracks the Combo, so no gate opens ahead of a rewrite.
+    await pumpGatesUntil({
+      gateDir,
+      resumeFilePath,
+      mayOpen: (marker, resume) => {
+        const combo = comboForMarker(marker, resume);
+        if (!combo) return false;
+        if (combo.questionName === "q-2") return marker.endsWith("-t1");
+        return true;
+      },
+      stop: (resume) => {
+        const q2 = resume.remaining.find((r) => r.questionName === "q-2");
+        return q2?.inFlight?.completedInvocations.length === 1;
+      },
+    });
+
+    // kill -9: no cleanup, no final write — the file must already be accurate.
+    proc.kill(9);
+    await proc.exited;
+
+    const killed = (await readResumeFile(resumeFilePath))!;
+    expect(killed).not.toBeNull();
+    expect(killed.version).toBe(1);
+
+    // q-1 archived before the kill and left `remaining`; q-2 is the only
+    // Combo still needing work, recorded as interrupted mid-execution.
+    expect(killed.remaining.map((r) => r.questionName)).toEqual(["q-2"]);
+    const interrupted = killed.remaining[0];
+    expect(interrupted.inFlight).toBeDefined();
+    const { runDir, completedInvocations } = interrupted.inFlight!;
+    expect(isAbsolute(runDir)).toBe(true);
+    // The surviving run dir really survives (the killed process ran no cleanup).
+    expect((await listDir(runDir)).length).toBeGreaterThan(0);
+    // The completed ticket invocation is recorded in run.json shape so a
+    // future resume can skip it instead of re-paying for it.
+    expect(completedInvocations).toHaveLength(1);
+    expect(completedInvocations[0].ticket).toBe(1);
+    expect(completedInvocations[0].ticketTitle).toBe("Ticket number 1");
+    expect(completedInvocations[0].status).toBe("ok");
+    expect(completedInvocations[0].dirty).toBe(false);
+
+    // Release any orphaned stub pi so the temp dir can be cleaned up.
+    await openWaitingGates(gateDir);
+  }, 60000);
+
+  it("records up to N in-flight entries when a concurrent Matrix is killed mid-batch", async () => {
+    const repoDir = join(tempRoot, "repo-killed-mid-batch");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeTicketedMatrixFixtures(
+      repoDir,
+      ["q-1", "q-2", "q-3"],
+      2
+    );
+    const stub = join(tempRoot, "stub-pi-gated-kill-batch");
+    await createGatedStubPi(stub, gateDir);
+    const driverPath = join(tempRoot, "resume-driver-batch.ts");
+    await writeResumeDriver(driverPath);
+    const resumeFilePath = join(tempRoot, "matrix-resume-20990101-000004.json");
+
+    const proc = Bun.spawn(
+      [
+        "bun",
+        driverPath,
+        fixtures.questionDir,
+        fixtures.configPath,
+        fixtures.sessionRoot,
+        runTempRoot,
+        stub,
+        piHome,
+        resumeFilePath,
+        "2",
+      ],
+      { env: { ...process.env, NODE_ENV: "test" }, stdout: "pipe", stderr: "pipe" }
+    );
+
+    // Two lanes run q-1 and q-2 concurrently; each may complete only its
+    // first ticket. The kill lands with both second tickets in flight.
+    await pumpGatesUntil({
+      gateDir,
+      resumeFilePath,
+      mayOpen: (marker, resume) =>
+        comboForMarker(marker, resume) !== undefined && marker.endsWith("-t1"),
+      stop: (resume) =>
+        resume.remaining.filter(
+          (r) => r.inFlight && r.inFlight.completedInvocations.length === 1
+        ).length === 2,
+    });
+
+    proc.kill(9);
+    await proc.exited;
+
+    const killed = (await readResumeFile(resumeFilePath))!;
+    expect(killed).not.toBeNull();
+    expect(killed.concurrency).toBe(2);
+
+    // All three Combos still need work; exactly N (= concurrency) of them
+    // carry in-flight state — the batch that was executing at the kill.
+    expect(killed.remaining.map((r) => r.questionName)).toEqual([
+      "q-1",
+      "q-2",
+      "q-3",
+    ]);
+    const inFlight = killed.remaining.filter((r) => r.inFlight);
+    expect(inFlight).toHaveLength(2);
+    for (const combo of inFlight) {
+      expect(isAbsolute(combo.inFlight!.runDir)).toBe(true);
+      expect((await listDir(combo.inFlight!.runDir)).length).toBeGreaterThan(0);
+      expect(combo.inFlight!.completedInvocations).toHaveLength(1);
+      expect(combo.inFlight!.completedInvocations[0].ticket).toBe(1);
+      expect(combo.inFlight!.completedInvocations[0].status).toBe("ok");
+    }
+    // q-3 never started: no in-flight state.
+    expect(
+      killed.remaining.find((r) => r.questionName === "q-3")!.inFlight
+    ).toBeUndefined();
+
+    // Release any orphaned stub pi so the temp dir can be cleaned up.
+    await openWaitingGates(gateDir);
+  }, 60000);
+
+  it("never serves a truncated or unparseable file while rewrites land continuously under concurrency", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-atomic-rewrites");
+    await mkdir(repoDir, { recursive: true });
+    // 4 Combos × 2 tickets at concurrency 3: combo starts, per-invocation
+    // flushes, and combo completions rewrite the file continuously.
+    const fixtures = await writeTicketedMatrixFixtures(
+      repoDir,
+      ["q-1", "q-2", "q-3", "q-4"],
+      2
+    );
+    const stub = join(tempRoot, "stub-pi-atomic");
+    await createMarkerStubPi(stub, join(tempRoot, "markers.log"), 0.05);
+    const resumeFilePath = join(tempRoot, "matrix-resume-20990101-000005.json");
+
+    // Concurrent reader for the whole run: every read must observe either
+    // no file (before creation / after deletion) or complete, parseable
+    // JSON — atomic rename makes a torn write unobservable.
+    let running = true;
+    let observed = 0;
+    const unparseable: string[] = [];
+    const reader = (async () => {
+      while (running) {
+        try {
+          JSON.parse(await readFile(resumeFilePath, "utf-8"));
+          observed++;
+        } catch (err) {
+          // ENOENT is legitimate (not yet created / already deleted);
+          // anything else means a reader saw a truncated file.
+          if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+            unparseable.push(String(err));
+          }
+        }
+      }
+    })();
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot: fixtures.sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 3,
+      resumeFilePath,
+    });
+    running = false;
+    await reader;
+
+    expect(results).toHaveLength(4);
+    // The reader genuinely observed the file mid-run (no vacuous pass).
+    expect(observed).toBeGreaterThan(0);
+    expect(unparseable).toEqual([]);
+    // Normal finish: neither the file nor a temp sibling remains.
+    expect(
+      (await listDir(tempRoot)).filter((f) => f.startsWith("matrix-resume-"))
+    ).toEqual([]);
+  }, 30000);
 });

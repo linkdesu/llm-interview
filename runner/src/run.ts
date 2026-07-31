@@ -12,6 +12,7 @@ import { join, resolve, sep, basename } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { setRunLogPath, runLog } from "./run-log";
+import { ResumeTracker } from "./resume";
 import { loadConfig, loadRegistry, type RegistryModel } from "./registry";
 import { loadQuestions, type Question, type Ticket } from "./question";
 import {
@@ -66,6 +67,15 @@ export interface RunMatrixOptions extends PiEnvironment {
    * index log is written.
    */
   indexLogPath?: string;
+  /**
+   * Optional path of the Resume File (see resume.ts). When set, the file
+   * is created before the first Combo runs, atomically rewritten after
+   * every Combo completion (and as in-flight invocations complete), and
+   * deleted when the Matrix finishes normally. The CLI names it
+   * matrix-resume-<timestamp>.json with the same timestamp id as the
+   * index log, deriving both from one matrix start time.
+   */
+  resumeFilePath?: string;
   /**
    * Question-level concurrency within one model (default 1 = fully
    * sequential). Models always run strictly one after another regardless
@@ -406,6 +416,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     runRules,
     maxTurns,
     indexLogPath,
+    resumeFilePath,
     concurrency = 1,
   } = options;
 
@@ -457,6 +468,27 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     }
   }
   const total = comboPlan.length;
+
+  // Resume File: created before the first Combo runs so interruption
+  // protection exists from the start. Rewritten after every Combo
+  // completion below; deleted only on normal Matrix completion — an
+  // interrupted or aborted Matrix keeps it, listing the Combos that
+  // still need work.
+  const resume = resumeFilePath
+    ? new ResumeTracker(resumeFilePath, {
+        questionFilter,
+        modelFilter,
+        concurrency,
+        piVersion,
+      })
+    : null;
+  await resume?.start(
+    comboPlan.map((c) => ({
+      questionName: c.question.name,
+      modelName: c.model.name,
+      comboId: c.comboId,
+    }))
+  );
 
   const outcomes: RunComboOutcome[] = [];
   const completed = new Set<string>();
@@ -520,6 +552,12 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         piHome,
         piVersion,
         runRules,
+        onRunDirReady: resume
+          ? (runDir) => resume.comboStarted(comboId, runDir)
+          : undefined,
+        onInvocationComplete: resume
+          ? (record) => resume.invocationCompleted(comboId, record)
+          : undefined,
       });
 
       const { outcome, apiError: comboApiError, archivedSessionJsonl, failReason } = result;
@@ -537,6 +575,12 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         ` ===`
       );
       comboEndRecords.push({ label, status: outcome.status, sessionJsonl: archivedSessionJsonl });
+
+      // A Combo leaves the Resume File's remaining list once archived —
+      // regardless of status ok/error. A Combo that crashed before
+      // archiving (failReason) keeps its entry: the work still needs doing.
+      if (!failReason) await resume?.comboArchived(comboId);
+
       const statusIcon = outcome.status === "ok" ? "✅" : "❌";
       progress(`=== Combo ${comboIndex}/${total} Done: ${statusIcon} ${outcome.status.toUpperCase()} (${durSec}s) ===`);
 
@@ -585,6 +629,10 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   }
 
   writeIndexSummary();
+  // Normal completion: delete the Resume File so a leftover never
+  // triggers a mistaken resume. (The API-failure abort above returns
+  // early and deliberately keeps it.)
+  await resume?.finish();
   return outcomes;
 }
 
@@ -611,6 +659,16 @@ interface RunComboParams {
   piHome: string;
   piVersion: string;
   runRules: string;
+  /**
+   * Optional callback fired once the combo's run dir exists — the dir
+   * survives an interruption, so the Resume File can point at it.
+   */
+  onRunDirReady?: (runDir: string) => void;
+  /**
+   * Optional callback fired after each invocation completes, in execution
+   * order, with the same record that goes into run.json's invocations.
+   */
+  onInvocationComplete?: (record: InvocationRecord) => void;
 }
 
 /**
@@ -640,6 +698,8 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
     piHome,
     piVersion,
     runRules,
+    onRunDirReady,
+    onInvocationComplete,
   } = params;
 
   let status: "ok" | "error" = "ok";
@@ -665,6 +725,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
     runLog(
       `=== Combo ${comboIndex}/${total} START: ${label} (${basename(setup.runDir)}) ===`
     );
+    onRunDirReady?.(setup.runDir);
 
     type Planned = { sessionId: string; prompt: string; ticket?: Ticket };
     const plan: Planned[] = perTicket
@@ -709,7 +770,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       // write-side tool result (read-only tool failures are benign).
       const dirty = res.exitCode !== 0 || res.maxTurnsExceeded || toolErrors;
 
-      invocations.push({
+      const record: InvocationRecord = {
         ticket: step.ticket?.index,
         ticketTitle: step.ticket?.title,
         dirty,
@@ -718,7 +779,9 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         maxTurnsExceeded: res.maxTurnsExceeded,
         apiError: res.apiError ?? undefined,
         durationMs: res.durationMs,
-      });
+      };
+      invocations.push(record);
+      onInvocationComplete?.(record);
 
       // Infrastructure failure (network outage etc.): every subsequent
       // invocation would fail the same way, so skip evaluation, fail the
@@ -770,7 +833,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
             ? null
             : await parseVerdict(evalRes.sessionFile);
 
-        invocations.push({
+        const evalRecord: InvocationRecord = {
           ticket: step.ticket.index,
           ticketTitle: step.ticket.title,
           evaluation: true,
@@ -781,7 +844,9 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
           maxTurnsExceeded: evalRes.maxTurnsExceeded,
           apiError: evalRes.apiError ?? undefined,
           durationMs: evalRes.durationMs,
-        });
+        };
+        invocations.push(evalRecord);
+        onInvocationComplete?.(evalRecord);
 
         // Same infrastructure-failure rule as ticket invocations: an
         // evaluation that died from an API failure says nothing about
@@ -984,14 +1049,21 @@ if (import.meta.main) {
   const configPath = join(repoRoot, "runner", "config.toml");
   const config = await loadConfig(configPath);
 
-  // One index log per matrix execution, written to the current working
-  // directory and named by the matrix start time (see run-log.ts).
+  // One timestamp id per matrix execution, shared by the index log and
+  // the Resume File so log and resume state pair up naturally. Both live
+  // in the current working directory (see run-log.ts and resume.ts).
+  const matrixTimestamp = formatTimestamp(new Date());
   const indexLogPath = join(
     process.cwd(),
-    `pi-run-${formatTimestamp(new Date())}.log`
+    `pi-run-${matrixTimestamp}.log`
+  );
+  const resumeFilePath = join(
+    process.cwd(),
+    `matrix-resume-${matrixTimestamp}.json`
   );
   setRunLogPath(indexLogPath);
   log(`writing index log: ${indexLogPath}`);
+  log(`writing Resume File: ${resumeFilePath}`);
 
   // Run the matrix with defaults
   let outcomes: RunComboOutcome[];
@@ -1009,6 +1081,7 @@ if (import.meta.main) {
       maxTurns: config.maxTurns,
       runRules: config.runRules,
       indexLogPath,
+      resumeFilePath,
       piVersion: await detectPiVersion(piBin).then((v) => {
         log(`pi --version => ${v}`);
         return v;
