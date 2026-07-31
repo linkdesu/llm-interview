@@ -1721,6 +1721,56 @@ function maxOverlap(
   return max;
 }
 
+/**
+ * A stub pi for API-failure drain tests: logs start/end markers like the
+ * marker stub, dies immediately with a terminal API failure when the
+ * prompt (the last argument) contains the fail token, and otherwise
+ * sleeps — staying in flight — before completing cleanly.
+ */
+async function createDrainStubPi(
+  stubPath: string,
+  markerLogPath: string,
+  failToken: string,
+  siblingSleepSeconds: number
+) {
+  const apiErrorSession =
+    '{"type":"message","message":{"role":"assistant","content":[],"stopReason":"error"}}';
+  const script = `#!/usr/bin/env bash
+# Stub pi: one combo fails terminally, siblings stay in flight then finish
+MARKER_LOG="${markerLogPath}"
+FAIL_TOKEN='${failToken}'
+MODEL=""
+SESSION_DIR=""
+PROMPT="${'${@: -1}'}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    --model) MODEL="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+echo "start $MODEL $(pwd)" >> "$MARKER_LOG"
+case "$PROMPT" in
+  *"$FAIL_TOKEN"*)
+    SESSION='${apiErrorSession}'
+    ;;
+  *)
+    sleep ${siblingSleepSeconds}
+    SESSION='${CLEAN_SESSION}'
+    ;;
+esac
+echo "$SESSION" > "$SESSION_DIR/session.jsonl"
+echo "end $MODEL $(pwd)" >> "$MARKER_LOG"
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+exit 0
+`;
+  await writeFile(stubPath, script, "utf-8");
+  await chmod(stubPath, 0o755);
+}
+
 describe("runMatrix concurrency", () => {
   let tempRoot: string;
   let piHome: string;
@@ -2090,5 +2140,141 @@ describe("runMatrix concurrency", () => {
     // rendered per combo completion (driven by completion, not iteration).
     expect(content).toContain("=== SUMMARY: 2 combos, 0 failed");
     expect(content.match(/\n[^\n]*Progress:\n/g)).toHaveLength(2);
+  });
+
+  it("drains the in-flight batch on a terminal API failure: siblings archive, later combos never start", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-api-drain");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-1-sibling", intent: "Build page one." },
+        { name: "q-2-failing", intent: "Build the page that hits a terminal API failure." },
+        { name: "q-3-later", intent: "Build page three." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    // q-2-failing dies immediately from a terminal API failure while its
+    // sibling q-1-sibling is still in flight (sleeping).
+    const stub = join(tempRoot, "stub-api-drain");
+    await createDrainStubPi(stub, markerLogPath, "terminal API failure", 0.4);
+
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 2,
+    });
+
+    // The batch drained, then the matrix aborted: q-3-later never ran.
+    expect(results).toHaveLength(2);
+    const byQuestion = Object.fromEntries(results.map((r) => [r.question.name, r]));
+    expect(byQuestion["q-1-sibling"].status).toBe("ok");
+    expect(byQuestion["q-2-failing"].status).toBe("error");
+
+    // Process-level observation: two invocations were in flight together
+    // when the failure hit, and no third invocation ever started.
+    const events = await readMarkerEvents(markerLogPath);
+    expect(events).toHaveLength(4);
+    expect(maxOverlap(events)).toBe(2);
+
+    // The sibling ran to completion and archived normally — already-paid
+    // tokens are never thrown away by the abort.
+    const siblingDirs = await listDir(join(sessionRoot, "q-1-sibling", "model-alpha"));
+    expect(siblingDirs).toHaveLength(1);
+    const siblingRunJson = JSON.parse(
+      await readFile(join(sessionRoot, "q-1-sibling", "model-alpha", siblingDirs[0], "run.json"), "utf-8")
+    ) as RunJson;
+    expect(siblingRunJson.status).toBe("ok");
+    expect(
+      await readFile(join(sessionRoot, "q-1-sibling", "model-alpha", siblingDirs[0], "session.jsonl"), "utf-8")
+    ).toContain("done");
+
+    // The failed combo archived too, recording the terminal API failure.
+    const failedDirs = await listDir(join(sessionRoot, "q-2-failing", "model-alpha"));
+    expect(failedDirs).toHaveLength(1);
+    const failedRunJson = JSON.parse(
+      await readFile(join(sessionRoot, "q-2-failing", "model-alpha", failedDirs[0], "run.json"), "utf-8")
+    ) as RunJson;
+    expect(failedRunJson.status).toBe("error");
+    expect(failedRunJson.apiError).toBeTruthy();
+
+    // q-3-later was never dequeued after the observed failure: no archive.
+    expect(await listDir(join(sessionRoot, "q-3-later", "model-alpha"))).toHaveLength(0);
+  });
+
+  it("names the abort reason in the SUMMARY exactly as the sequential path does", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-api-drain-summary");
+    await mkdir(repoDir, { recursive: true });
+    const fixtures = await writeFixtures(
+      repoDir,
+      [
+        {
+          name: "model-alpha",
+          provider: "llamacpp-local",
+          modelId: "alpha.gguf",
+          params: { temp: 0.7 },
+        },
+      ],
+      [
+        { name: "q-1-sibling", intent: "Build page one." },
+        { name: "q-2-failing", intent: "Build the page that hits a terminal API failure." },
+        { name: "q-3-later", intent: "Build page three." },
+      ]
+    );
+    const sessionRoot = join(repoDir, "session");
+
+    const stub = join(tempRoot, "stub-api-drain-summary");
+    await createDrainStubPi(stub, markerLogPath, "terminal API failure", 0.4);
+
+    const indexLogPath = join(tempRoot, "pi-run-20990101-000004.log");
+    const results = await runMatrix({
+      questionDir: fixtures.questionDir,
+      configPath: fixtures.configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      concurrency: 2,
+      indexLogPath,
+    });
+
+    expect(results).toHaveLength(2);
+    const content = await readFile(indexLogPath, "utf-8");
+
+    // Both in-flight combos got their END markers with archived transcript
+    // paths before the matrix returned.
+    expect(content).toMatch(/=== Combo 1\/3 START: q-1-sibling × model-alpha/);
+    expect(content).toMatch(/=== Combo 1\/3 END: OK \([\d.]+s\) session: .+session\.jsonl ===/);
+    expect(content).toMatch(/=== Combo 2\/3 END: ERROR \([\d.]+s\) session: .+session\.jsonl ===/);
+
+    // The SUMMARY names the abort reason with the exact string the
+    // sequential path uses.
+    expect(content).toContain(
+      '=== SUMMARY: 2 combos, 1 failed — aborted: transcript ends with stopReason "error"'
+    );
+
+    // q-3-later never started.
+    expect(content).not.toContain("START: q-3-later");
   });
 });
