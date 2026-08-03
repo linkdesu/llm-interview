@@ -3857,6 +3857,24 @@ describe("resumeMatrix", () => {
       /unsupported Resume File version/
     );
 
+    // A non-array filter must be rejected as malformed, not crash later
+    // inside the engine's filter application.
+    const badFilter = join(tempRoot, "matrix-resume-bad-filter.json");
+    await writeFile(
+      badFilter,
+      JSON.stringify({
+        version: 1,
+        questionFilter: "q-1",
+        concurrency: 1,
+        piVersion: "x",
+        remaining: [],
+      }),
+      "utf-8"
+    );
+    await expect(resumeMatrix(badFilter, options)).rejects.toThrow(
+      /malformed questionFilter/
+    );
+
     expect(await fileExists(countLog)).toBe(false);
     expect(await listDir(fixtures.sessionRoot)).toEqual([]);
   }, 30000);

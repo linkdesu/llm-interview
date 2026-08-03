@@ -212,6 +212,17 @@ export async function loadResumeFile(
     fail(`invalid concurrency ${JSON.stringify(file.concurrency)}`);
   }
   if (typeof file.piVersion !== "string") fail("missing piVersion");
+  for (const [key, filter] of [
+    ["questionFilter", file.questionFilter],
+    ["modelFilter", file.modelFilter],
+  ] as const) {
+    if (
+      filter !== undefined &&
+      (!Array.isArray(filter) || filter.some((n) => typeof n !== "string"))
+    ) {
+      fail(`malformed ${key} (expected an array of strings)`);
+    }
+  }
   if (!Array.isArray(file.remaining)) fail("missing remaining Combo list");
   for (const combo of file.remaining) {
     if (
