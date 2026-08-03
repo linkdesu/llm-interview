@@ -24,6 +24,12 @@ export interface RegistryModel {
 export interface RunnerConfig {
   models: RegistryModel[];
   maxTurns: number;
+  /**
+   * Heartbeat interval in seconds: how often the console prints a
+   * "(running)" line per in-flight Combo during long turns. Optional
+   * (`heartbeat_seconds` in config.toml), defaults to 60 when absent.
+   */
+  heartbeatSeconds: number;
   runRules: string;
   configDir: string;
 }
@@ -105,6 +111,11 @@ export async function loadConfig(path: string): Promise<RunnerConfig> {
 
   const maxTurns = typeof data.max_turns === "number" ? data.max_turns : 100;
 
+  const heartbeatSeconds =
+    typeof data.heartbeat_seconds === "number" && data.heartbeat_seconds > 0
+      ? data.heartbeat_seconds
+      : 60;
+
   let runRules = "";
   const runRulesPath = String(data.run_rules ?? "");
   if (runRulesPath.trim()) {
@@ -115,7 +126,7 @@ export async function loadConfig(path: string): Promise<RunnerConfig> {
     }
   }
 
-  return { models, maxTurns, runRules, configDir };
+  return { models, maxTurns, heartbeatSeconds, runRules, configDir };
 }
 
 /**

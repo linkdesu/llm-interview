@@ -14,74 +14,29 @@ import { homedir } from "node:os";
 import { runLog } from "./run-log";
 import type { Question } from "./question";
 
+// runLog side only: the console channel is the compact progress view in
+// run.ts (driven by the onTurn/onApiRetry callbacks below), so pi-runner
+// itself no longer writes to the console at all.
 const log = (msg: string) => {
   runLog(`[pi] ${msg}`);
-  if (process.env.NODE_ENV !== "test") console.error(`[pi] ${msg}`);
 };
 
-type Section = "idle" | "thinking" | "tool" | "response";
-let aiSection: Section = "idle";
-let aiStarted = false;
-let turnCount = 0;
-let maxTurnsExceeded = false;
-let killedForMaxTurns = false;
-let maxTurns = 100;
 /**
- * Terminal API failure observed in the event stream (final auto-retry
- * failure). Null when the invocation had no fatal API error.
+ * Per-invocation mutable state. Local to runInvocation (never module
+ * scope): under Concurrency several invocations run side by side in one
+ * process, and shared counters would leak turns, kills, and terminal API
+ * failures across Combos.
  */
-let apiFailure: string | null = null;
-
-const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
-const yellow = (s: string) => `\x1b[33m${s}\x1b[39m`;
-const reset = "\x1b[0m";
-const bold = (s: string) => `\x1b[1m${s}\x1b[22m`;
-
-function sectionHeader(label: string): void {
-  process.stdout.write(`\n${dim("━".repeat(8))} ${bold(label)} ${dim("━".repeat(8))}\n`);
-}
-
-function aiSeparator(): void {
-  if (!aiStarted) {
-    aiStarted = true;
-    process.stdout.write(`\n${dim("━".repeat(50))}\n`);
-  }
-}
-
-function switchSection(section: Section): void {
-  if (aiSection === section) return;
-  aiSection = section;
-  aiSeparator();
-  const labels: Record<Section, string> = {
-    idle: "",
-    thinking: "Thinking",
-    tool: "Tool Calls",
-    response: "Response",
-  };
-  sectionHeader(labels[section]);
-}
-
-function formatArgs(toolName: string, args: unknown): string {
-  if (!args || typeof args !== "object") return String(args ?? "");
-  const a = args as Record<string, unknown>;
-  switch (toolName) {
-    case "read":
-      return String(a.filePath ?? a.path ?? a.file ?? "");
-    case "write":
-    case "edit": {
-      const path = a.filePath ?? a.path ?? a.file ?? "";
-      const preview = toolName === "write"
-        ? String(a.content ?? a.data ?? "").slice(0, 60).replace(/\n/g, "\\n")
-        : String(a.oldString ?? "").slice(0, 60).replace(/\n/g, "\\n");
-      return `${path}${preview ? "\n    " + preview + (String(a.content ?? "").length > 60 ? "..." : "") : ""}`;
-    }
-    case "bash":
-      return String(a.command ?? "");
-    case "grep":
-      return `${a.pattern ?? ""}${a.path ? " in " + a.path : ""}`;
-    default:
-      return JSON.stringify(args).slice(0, 200);
-  }
+interface InvocationState {
+  turnCount: number;
+  maxTurnsExceeded: boolean;
+  killedForMaxTurns: boolean;
+  maxTurns: number;
+  /**
+   * Terminal API failure observed in the event stream (final auto-retry
+   * failure). Null when the invocation had no fatal API error.
+   */
+  apiFailure: string | null;
 }
 
 /**
@@ -124,7 +79,18 @@ function filterLogLine(line: string): string {
   return line;
 }
 
-function renderJsonEvent(line: string): void {
+/**
+ * Process one stdout event line: track turns, detect terminal API
+ * failures, and forward progress events to the caller's callbacks. The
+ * full agent stream itself is deliberately NOT rendered to the console
+ * (the compact progress view in run.ts replaced it) — it remains
+ * available per invocation in the pi-output log and its archive.
+ */
+function processJsonEvent(
+  line: string,
+  options: InvocationOptions,
+  state: InvocationState
+): void {
   let event: Record<string, unknown>;
   try {
     event = JSON.parse(line);
@@ -133,113 +99,33 @@ function renderJsonEvent(line: string): void {
   }
   const t = event.type as string;
 
-  // --- Assistant message events ---
-  if (t === "message_update") {
-    const ev = event.assistantMessageEvent as Record<string, unknown> | undefined;
-    if (!ev || typeof ev !== "object") return;
-    switch (ev.type) {
-      case "thinking_delta":
-        switchSection("thinking");
-        process.stdout.write(String(ev.delta ?? ""));
-        return;
-      case "text_delta":
-        switchSection("response");
-        process.stdout.write(String(ev.delta ?? ""));
-        return;
-      case "tool_use": {
-        const name = ev.toolName ?? ev.name ?? "?";
-        const argsStr = formatArgs(name, ev.input ?? ev.args);
-        switchSection("tool");
-        process.stdout.write(`${dim("  ›")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
-        return;
-      }
-    }
-    return;
-  }
-
-  // --- Tool execution ---
-  if (t === "tool_execution_start") {
-    const name = event.toolName as string ?? "?";
-    const argsStr = formatArgs(name, event.args);
-    switchSection("tool");
-    process.stdout.write(`${dim("  ›")} ${name}${argsStr ? " " + argsStr : ""}${reset}\n`);
-    return;
-  }
-  if (t === "tool_execution_update") {
-    const preview = event.partialResult != null
-      ? JSON.stringify(event.partialResult).slice(0, 200).replace(/\n/g, " ")
-      : "";
-    if (preview) process.stdout.write(`    ${dim(preview)}\n`);
-    return;
-  }
-  if (t === "tool_execution_end") {
-    const name = event.toolName as string ?? "?";
-    const isError = event.isError === true;
-    if (isError) {
-      process.stdout.write(`${dim("  ›")} ${name} ${dim("— failed")}\n`);
-    }
-    return;
-  }
-
   // --- Turn lifecycle ---
   if (t === "turn_start") {
-    turnCount++;
-    if (turnCount > maxTurns) {
-      maxTurnsExceeded = true;
+    state.turnCount++;
+    if (state.turnCount > state.maxTurns) {
+      state.maxTurnsExceeded = true;
     }
     return;
   }
   if (t === "turn_end") {
-    const results = event.toolResults as Array<unknown> | undefined;
-    if (results && results.length > 0) {
-      switchSection("tool");
-      process.stdout.write(`${dim(`  › turn ${turnCount} (${results.length} tools)`)}${reset}\n`);
-    }
-    return;
-  }
-
-  // --- Queue / planning ---
-  if (t === "queue_update") {
-    const steering = event.steering as string[] | undefined;
-    if (steering && steering.length > 0) {
-      aiSeparator();
-      process.stdout.write(`\n${dim("  ↳ plan:")} ${bold(steering.join(dim(" → ")))}\n`);
-    }
-    return;
-  }
-
-  // --- Compaction (context window management) ---
-  if (t === "compaction_start") {
-    aiSeparator();
-    const reason = String(event.reason ?? "threshold");
-    process.stdout.write(`\n${yellow(`  ⚠ compressing context (${reason})...`)}\n`);
-    return;
-  }
-  if (t === "compaction_end") {
-    if (event.aborted) {
-      process.stdout.write(`${yellow("  ⚠ compression aborted")}\n`);
-    } else {
-      process.stdout.write(`${dim("  ✓ context compressed")}\n`);
-    }
+    options.onTurn?.(state.turnCount);
     return;
   }
 
   // --- Auto-retry ---
   if (t === "auto_retry_start") {
-    const attempt = Number(event.attempt ?? 1);
-    const maxAttempts = Number(event.maxAttempts ?? 3);
-    const delaySec = (Number(event.delayMs ?? 0) / 1000).toFixed(1);
-    process.stdout.write(`${yellow("  ⚠ API error")} ${bold(String(event.errorMessage ?? ""))} ${dim(`retrying ${attempt}/${maxAttempts} (${delaySec}s)...`)}\n`);
+    options.onApiRetry?.({
+      attempt: Number(event.attempt ?? 1),
+      maxAttempts: Number(event.maxAttempts ?? 3),
+      errorMessage: String(event.errorMessage ?? ""),
+    });
     return;
   }
   if (t === "auto_retry_end") {
-    if (event.success === true) {
-      process.stdout.write(`${dim("  ✓ retry succeeded")}\n`);
-    } else {
+    if (event.success !== true) {
       // Final retry failure: pi gives up on the request but still exits 0,
       // so this is the runner's only reliable terminal-failure signal.
-      apiFailure = String(event.finalError ?? "unknown API error");
-      process.stdout.write(`${yellow("  ⚠ retry failed:")} ${String(event.finalError ?? "")}\n`);
+      state.apiFailure = String(event.finalError ?? "unknown API error");
     }
     return;
   }
@@ -401,6 +287,20 @@ export interface InvocationOptions {
   piHome: string;
   /** Maximum assistant turns before the process is killed. */
   maxTurns: number;
+  /**
+   * Progress callback fired at each turn end with the count of completed
+   * turns — the caller (run.ts) renders the compact console turn line.
+   */
+  onTurn?: (turnCount: number) => void;
+  /**
+   * Progress callback fired when pi starts auto-retrying a failed API
+   * request — the caller renders the compact console warning line.
+   */
+  onApiRetry?: (retry: {
+    attempt: number;
+    maxAttempts: number;
+    errorMessage: string;
+  }) => void;
 }
 
 /**
@@ -439,14 +339,14 @@ export interface InvocationResult {
  * - Renames the invocation's new session JSONL file to <sessionId>.jsonl.
  */
 export async function runInvocation(options: InvocationOptions): Promise<InvocationResult> {
-  // Reset module state for this invocation
-  aiSection = "idle";
-  aiStarted = false;
-  turnCount = 0;
-  maxTurnsExceeded = false;
-  killedForMaxTurns = false;
-  maxTurns = options.maxTurns;
-  apiFailure = null;
+  // Fresh per-invocation state (see InvocationState)
+  const state: InvocationState = {
+    turnCount: 0,
+    maxTurnsExceeded: false,
+    killedForMaxTurns: false,
+    maxTurns: options.maxTurns,
+    apiFailure: null,
+  };
 
   const {
     prompt,
@@ -506,31 +406,16 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     stdio: ["inherit", "pipe", "pipe"],
   });
 
-  // Collect all output (stdout + stderr) into chunks for the log file
+  // Collect all output (stdout + stderr) into chunks for the log file.
+  // pi's stderr is captured here only — it is no longer forwarded to the
+  // console (compact progress view); the pi-output log keeps it verbatim.
   const chunks: Buffer[] = [];
+  child.stderr.on("data", (d: Buffer) => chunks.push(d));
 
-  // Prefix pi stderr lines with [pi>error] for visibility. Expected noise is
-  // suppressed: the runner always passes a fresh --session-id per invocation
-  // by design, so pi's "no session found, creating a new one" warning fires
-  // on every single invocation and means nothing. The raw line still lands
-  // in the output log via `chunks` above.
-  let stderrBuffer = "";
-  child.stderr.on("data", (d: Buffer) => {
-    chunks.push(d);
-    stderrBuffer += d.toString("utf-8");
-    const lines = stderrBuffer.split("\n");
-    stderrBuffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.length === 0) continue;
-      if (/^Warning: No project session found with id '.*'; creating a new session with that id\.?$/.test(trimmed)) continue;
-      process.stderr.write(`[pi>error] ${line}\n`);
-    }
-  });
-
-  // Parse JSONL events from stdout and render human-readable text. The log
-  // file gets a filtered copy: streaming deltas carry cumulative snapshots
-  // that bloat the log quadratically (see filterLogLine).
+  // Parse JSONL events from stdout for turn tracking, terminal API failure
+  // detection, and the caller's progress callbacks. The log file gets a
+  // filtered copy: streaming deltas carry cumulative snapshots that bloat
+  // the log quadratically (see filterLogLine).
   let lineBuffer = "";
   child.stdout.on("data", (d: Buffer) => {
     lineBuffer += d.toString("utf-8");
@@ -540,10 +425,10 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     for (const line of lines) {
       if (line.trim().length === 0) continue;
       chunks.push(Buffer.from(filterLogLine(line) + "\n"));
-      renderJsonEvent(line);
-      if (maxTurnsExceeded && !killedForMaxTurns) {
-        log(`max turns exceeded (${turnCount}), killing process`);
-        killedForMaxTurns = true;
+      processJsonEvent(line, options, state);
+      if (state.maxTurnsExceeded && !state.killedForMaxTurns) {
+        log(`max turns exceeded (${state.turnCount}), killing process`);
+        state.killedForMaxTurns = true;
         child.kill("SIGKILL");
         break;
       }
@@ -566,11 +451,8 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   });
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  if (aiStarted) {
-    process.stdout.write(`\n${dim("━".repeat(50))}\n\n`);
-  }
-  if (killedForMaxTurns) {
-    log(`killed after ${elapsed}s: max turns (${maxTurns}) exceeded`);
+  if (state.killedForMaxTurns) {
+    log(`killed after ${elapsed}s: max turns (${state.maxTurns}) exceeded`);
   } else {
     log(`exited with code ${exitCode} (${elapsed}s)`);
   }
@@ -624,7 +506,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   // Backstop: if the event stream showed no terminal retry failure but the
   // transcript's last assistant message ended with stopReason "error", the
   // invocation still died from an API failure (e.g. auto-retry disabled).
-  let apiError: string | null = apiFailure;
+  let apiError: string | null = state.apiFailure;
   if (!apiError && sessionFile && (await sessionEndedWithApiError(sessionFile))) {
     apiError = 'transcript ends with stopReason "error"';
   }
@@ -632,7 +514,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   return {
     sessionId,
     exitCode,
-    maxTurnsExceeded: killedForMaxTurns,
+    maxTurnsExceeded: state.killedForMaxTurns,
     durationMs,
     sessionFile,
     stdoutFile,

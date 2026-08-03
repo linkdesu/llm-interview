@@ -36,13 +36,67 @@ import {
   type WorkdirSetup,
 } from "./pi-runner";
 
+// ---------------------------------------------------------------------------
+// Compact console progress view
+// ---------------------------------------------------------------------------
+//
+// The console is a scrolling line stream — one line per state transition,
+// prefixed `[HH:MM:SS] [model] [question]` — designed to stay readable
+// under Concurrency, when several Combos are in flight at once. Five line
+// types: Combo start (▸), Ticket start (▸), turn end (·), Combo end
+// (✔/✘), and warnings/errors (⚠ API retry, ✘ terminal failure /
+// kill). Beyond those, only matrix-scope lines (`[matrix]`) and the final
+// results table appear; the per-completion progress overview and the full
+// pi agent stream were removed from the console (the stream stays
+// available per invocation in the workdir's pi-output log and its
+// archive). Elapsed times are always Combo-level, counted from Combo
+// start.
+//
+// Dual-channel emission: the index log (runLog) keeps its long-standing
+// lines byte-for-byte; only the console side of each call site uses the
+// new format. All console output keeps the NODE_ENV=test suppression
+// convention so the test suite never floods.
+
+/**
+ * Console column widths (brackets included), computed once after
+ * filtering: the model and question columns pad to the widest name in the
+ * filtered set, and matrix-scope lines use a `[matrix]` placeholder at
+ * the model column width.
+ */
+const consoleColumns = { model: "[matrix]".length, question: 0 };
+
+/** Current local time as HH:MM:SS. */
+function hhmmss(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** Emit a matrix-scope console line: `[HH:MM:SS] [matrix] message`. */
+function emitMatrix(msg: string): void {
+  if (process.env.NODE_ENV === "test") return;
+  console.log(`[${hhmmss()}] ${"[matrix]".padEnd(consoleColumns.model)} ${msg}`);
+}
+
+/** Emit a combo-scope console line: `[HH:MM:SS] [model] [question] message`. */
+function emitCombo(model: string, question: string, msg: string): void {
+  if (process.env.NODE_ENV === "test") return;
+  console.log(
+    `[${hhmmss()}] ${`[${model}]`.padEnd(consoleColumns.model)} ${`[${question}]`.padEnd(consoleColumns.question)} ${msg}`
+  );
+}
+
 const log = (msg: string) => {
   runLog(`[matrix] ${msg}`);
-  if (process.env.NODE_ENV !== "test") console.error(`[matrix] ${msg}`);
+  emitMatrix(msg);
 };
+/**
+ * Dual-channel progress line: the runLog side keeps the legacy format
+ * byte-for-byte; the console side of each call site is emitted separately
+ * via emitMatrix/emitCombo — or dropped (the progress overview block).
+ */
 const progress = (msg: string) => {
   runLog(msg);
-  if (process.env.NODE_ENV !== "test") console.log(msg);
 };
 
 // ---------------------------------------------------------------------------
@@ -89,6 +143,12 @@ export interface RunMatrixOptions extends PiEnvironment {
    * of this value. Must be a positive integer.
    */
   concurrency?: number;
+  /**
+   * Heartbeat interval in seconds (default 60): how often the console
+   * prints a "(running)" line per in-flight Combo during long turns.
+   * Comes from config.toml's optional `heartbeat_seconds` key.
+   */
+  heartbeatSeconds?: number;
   /**
    * Resume mode (internal — set by resumeMatrix, never by the CLI's fresh
    * run): execute exactly these remaining Combos instead of the full
@@ -143,6 +203,28 @@ interface RunComboResult {
   archivedSessionJsonl: string | null;
   /** Exception message when the combo crashed without archiving. */
   failReason: string | undefined;
+}
+
+/**
+ * Live state of an in-flight Combo, shared between the combo's invocation
+ * loop (which updates it) and the matrix-level heartbeat timer (which
+ * reads it to render "(running)" lines). Kept in the same closure that
+ * already carries the invocation-loop context.
+ */
+interface InFlightCombo {
+  /** Model name (console prefix). */
+  model: string;
+  /** Question name (console prefix). */
+  question: string;
+  /**
+   * Current ticket label ("ticket 2/5"), or null for single-invocation
+   * Questions (they omit the ticket segment).
+   */
+  ticket: string | null;
+  /** Completed turns of the current invocation. */
+  turn: number;
+  /** Combo start (ms epoch) — heartbeat elapsed is always Combo-level. */
+  startedAtMs: number;
 }
 
 /**
@@ -433,6 +515,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     indexLogPath,
     resumeFilePath,
     concurrency = 1,
+    heartbeatSeconds = 60,
     resumeRemaining,
   } = options;
 
@@ -463,10 +546,22 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   // Load registry and questions
   const models = await loadRegistry(configPath);
   const questions = await loadQuestions(questionDir);
-  log(`loaded ${models.length} models, ${questions.length} questions`);
 
   const filteredModels = applyNameFilter(models, modelFilter, "model", (m) => m.modelId);
   const filteredQuestions = applyNameFilter(questions, questionFilter, "question", (q) => q.name);
+
+  // Console column widths: computed once, now that the filtered set (and
+  // thus the exec plan's names) is known — pad to the widest names.
+  consoleColumns.model = Math.max(
+    "[matrix]".length,
+    ...filteredModels.map((m) => m.name.length + 2)
+  );
+  consoleColumns.question = Math.max(
+    0,
+    ...filteredQuestions.map((q) => q.name.length + 2)
+  );
+
+  log(`loaded ${models.length} models, ${questions.length} questions`);
   if (filteredModels.length !== models.length || filteredQuestions.length !== questions.length) {
     log(`filtered to ${filteredModels.length} models × ${filteredQuestions.length} questions = ${filteredModels.length * filteredQuestions.length} combos`);
   }
@@ -581,6 +676,26 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
     }
   };
 
+  // Heartbeat: one matrix-level timer (shared by all Combos) emits one
+  // "(running)" line per in-flight Combo every heartbeatSeconds, so a long
+  // turn never looks dead. Unref'd so it never keeps the process alive;
+  // cleared on every exit path below (normal finish and the API-failure
+  // abort alike) via try/finally.
+  const inFlight = new Map<string, InFlightCombo>();
+  const heartbeat = setInterval(() => {
+    for (const combo of inFlight.values()) {
+      const elapsed = Math.round((Date.now() - combo.startedAtMs) / 1000);
+      const ticketSeg = combo.ticket ? `${combo.ticket} · ` : "";
+      emitCombo(
+        combo.model,
+        combo.question,
+        `· ${ticketSeg}turn ${combo.turn} (running) · ${elapsed}s`
+      );
+    }
+  }, heartbeatSeconds * 1000);
+  heartbeat.unref();
+
+  try {
   // Model-major iteration: one model finishes all questions before the next
   for (const model of filteredModels) {
     // Concurrency: up to `concurrency` questions of THIS model execute
@@ -602,32 +717,54 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
       progress(`\n=== Combo ${comboIndex}/${total} ===`);
       progress(`Starting: ${label}`);
+      // Console combo start: ticket count only for per-ticket Questions.
+      const ticketCount =
+        question.tickets.length >= 2 ? ` · ${question.tickets.length} tickets` : "";
+      emitCombo(model.name, question.name, `▸ combo ${comboIndex}/${total} start${ticketCount}`);
+
+      // In-flight state for the heartbeat: the combo's invocation loop
+      // (inside runCombo) keeps it current; the entry leaves the map when
+      // the combo settles, whether it archived, failed, or crashed.
+      const heartbeatState: InFlightCombo = {
+        model: model.name,
+        question: question.name,
+        ticket: null,
+        turn: 0,
+        startedAtMs: Date.now(),
+      };
+      inFlight.set(comboId, heartbeatState);
 
       // Delegate the per-combo execution to the extracted function.
       // It receives only explicit parameters and returns a structured result.
-      const result = await runCombo({
-        question,
-        model,
-        comboId,
-        comboIndex,
-        total,
-        label,
-        startedAt,
-        effectiveMaxTurns: model.maxTurns ?? maxTurns,
-        sessionRoot,
-        tempRoot,
-        piBin,
-        piHome,
-        piVersion,
-        runRules,
-        adoptedRun: plan.adoptedRun,
-        onRunDirReady: resume
-          ? (runDir) => resume.comboStarted(comboId, runDir)
-          : undefined,
-        onInvocationComplete: resume
-          ? (record) => resume.invocationCompleted(comboId, record)
-          : undefined,
-      });
+      let result: RunComboResult;
+      try {
+        result = await runCombo({
+          question,
+          model,
+          comboId,
+          comboIndex,
+          total,
+          label,
+          startedAt,
+          effectiveMaxTurns: model.maxTurns ?? maxTurns,
+          sessionRoot,
+          tempRoot,
+          piBin,
+          piHome,
+          piVersion,
+          runRules,
+          adoptedRun: plan.adoptedRun,
+          heartbeatState,
+          onRunDirReady: resume
+            ? (runDir) => resume.comboStarted(comboId, runDir)
+            : undefined,
+          onInvocationComplete: resume
+            ? (record) => resume.invocationCompleted(comboId, record)
+            : undefined,
+        });
+      } finally {
+        inFlight.delete(comboId);
+      }
 
       const { outcome, apiError: comboApiError, archivedSessionJsonl, failReason } = result;
 
@@ -652,8 +789,18 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
 
       const statusIcon = outcome.status === "ok" ? "✅" : "❌";
       progress(`=== Combo ${comboIndex}/${total} Done: ${statusIcon} ${outcome.status.toUpperCase()} (${durSec}s) ===`);
+      // Console combo end: outcome + Combo-level elapsed (+ archived).
+      const elapsedSec = Math.round((Date.now() - Date.parse(startedAt)) / 1000);
+      emitCombo(
+        model.name,
+        question.name,
+        outcome.status === "ok"
+          ? `✔ ok · ${elapsedSec}s · archived`
+          : `✘ error · ${elapsedSec}s${archivedSessionJsonl ? " · archived" : ""}`
+      );
 
-      // Print progress overview
+      // Progress overview: the console side is deleted outright (the
+      // compact view replaced it); the index log keeps it unchanged.
       const lines = [`\nProgress:`];
       for (const plan of execPlan) {
         if (completed.has(plan.comboId)) {
@@ -692,9 +839,16 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
         `\n⚠ Matrix aborted: terminal API failure (${apiError}).\n` +
         `Restore connectivity, then re-run the remaining combos.`
       );
+      emitMatrix(
+        `⚠ Matrix aborted: terminal API failure (${apiError}). ` +
+        `Restore connectivity, then re-run the remaining combos.`
+      );
       writeIndexSummary(apiError);
       return outcomes;
     }
+  }
+  } finally {
+    clearInterval(heartbeat);
   }
 
   writeIndexSummary();
@@ -804,6 +958,12 @@ interface RunComboParams {
    */
   onInvocationComplete?: (record: InvocationRecord) => void;
   /**
+   * Optional live state shared with the matrix-level heartbeat timer: the
+   * invocation loop below keeps the current ticket and turn up to date so
+   * the heartbeat can render "(running)" lines while a long turn runs.
+   */
+  heartbeatState?: InFlightCombo;
+  /**
    * Resume state for an interrupted Combo: adopt the recorded run dir and
    * carry the completed invocations into the new archive instead of
    * re-running them. Ignored for single-invocation Combos (they always
@@ -845,8 +1005,24 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
     runRules,
     onRunDirReady,
     onInvocationComplete,
+    heartbeatState,
     adoptedRun,
   } = params;
+
+  // Combo-scoped console emission in the compact progress format. Elapsed
+  // is always Combo-level, counted from combo start.
+  const emit = (msg: string) => emitCombo(model.name, question.name, msg);
+  const comboElapsed = () => Math.round((Date.now() - Date.parse(startedAt)) / 1000);
+
+  /** Progress callbacks wiring an invocation into the compact console view. */
+  const invocationCallbacks = (ticketSeg: string) => ({
+    onTurn: (turn: number) => {
+      if (heartbeatState) heartbeatState.turn = turn;
+      emit(`· ${ticketSeg}turn ${turn} · ${comboElapsed()}s`);
+    },
+    onApiRetry: (retry: { attempt: number; maxAttempts: number; errorMessage: string }) =>
+      emit(`⚠ API error ${retry.errorMessage} · retrying ${retry.attempt}/${retry.maxAttempts}`),
+  });
 
   let status: "ok" | "error" = "ok";
   let exitCode: number | null = null;
@@ -958,7 +1134,10 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
      */
     const arbitrateDirtyTicket = async (step: Planned): Promise<boolean> => {
       const ticket = step.ticket!;
+      const ticketSeg = `ticket ${ticket.index}/${plan.length} · `;
       progress(`  → ${step.sessionId}-eval: evaluating ticket ${ticket.index}`);
+      if (heartbeatState) heartbeatState.turn = 0;
+      emit(`· ${ticketSeg}evaluating (dirty invocation)`);
       const evalRes = await runInvocation({
         prompt: buildEvaluationPrompt(question, ticket, plan.length),
         workdir: setup!.workdir,
@@ -970,10 +1149,14 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         piBin,
         piHome,
         maxTurns: effectiveMaxTurns,
+        ...invocationCallbacks(ticketSeg),
       });
 
       if (evalRes.sessionFile) sessionFiles.push(evalRes.sessionFile);
-      if (evalRes.maxTurnsExceeded) maxTurnsExceeded = true;
+      if (evalRes.maxTurnsExceeded) {
+        maxTurnsExceeded = true;
+        emit(`✘ ${ticketSeg}evaluation killed: max turns (${effectiveMaxTurns}) exceeded`);
+      }
 
       const evalToolErrors = evalRes.sessionFile
         ? await sessionHasWriteToolErrors(evalRes.sessionFile)
@@ -1010,6 +1193,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       // ticket completeness — abort the matrix, not just the run.
       if (evalRes.apiError) {
         progress(`  ✗ ${step.sessionId}-eval: terminal API failure (${evalRes.apiError})`);
+        emit(`✘ ${ticketSeg}terminal API failure (${evalRes.apiError})`);
         status = "error";
         apiError = evalRes.apiError;
         return false;
@@ -1022,10 +1206,12 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
           ? "no verdict marker found in evaluation (treated as INCOMPLETE)"
           : "judged INCOMPLETE by evaluation";
         progress(`  ✗ ticket ${ticket.index}: ${reason} — aborting run`);
+        emit(`✘ ${ticketSeg}${reason} — aborting run`);
         status = "error";
         return false;
       }
       progress(`  ✓ ticket ${ticket.index} judged complete despite dirty signals`);
+      emit(`✔ ${ticketSeg}judged complete despite dirty signals`);
       return true;
     };
 
@@ -1045,6 +1231,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
             progress(
               `  ↷ ${step.sessionId}: ticket ${step.ticket.index} completed before the interruption — skipping`
             );
+            emit(`· ticket ${step.ticket.index}/${plan.length} · skipped (completed before the interruption)`);
             continue;
           }
           if (!(await arbitrateDirtyTicket(step))) break;
@@ -1060,6 +1247,21 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         : "single invocation";
       progress(`  → ${step.sessionId}: ${stepLabel}`);
 
+      // Ticket start (console): single-invocation Questions omit the
+      // ticket segment — they get turn lines only.
+      const ticketSeg = step.ticket
+        ? `ticket ${step.ticket.index}/${plan.length} · `
+        : "";
+      if (heartbeatState) {
+        heartbeatState.ticket = step.ticket
+          ? `ticket ${step.ticket.index}/${plan.length}`
+          : null;
+        heartbeatState.turn = 0;
+      }
+      if (step.ticket) {
+        const rerunNote = seededRecords.length > 0 ? " (re-running after the interruption)" : "";
+        emit(`▸ ticket ${step.ticket.index}/${plan.length} · ${step.ticket.title}${rerunNote}`);
+      }
       const res = await runInvocation({
         prompt: step.prompt,
         workdir: setup.workdir,
@@ -1071,11 +1273,15 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         piBin,
         piHome,
         maxTurns: effectiveMaxTurns,
+        ...invocationCallbacks(ticketSeg),
       });
 
       if (res.sessionFile) sessionFiles.push(res.sessionFile);
       exitCode = res.exitCode;
-      if (res.maxTurnsExceeded) maxTurnsExceeded = true;
+      if (res.maxTurnsExceeded) {
+        maxTurnsExceeded = true;
+        emit(`✘ ${ticketSeg}killed: max turns (${effectiveMaxTurns}) exceeded`);
+      }
 
       const toolErrors = res.sessionFile
         ? await sessionHasWriteToolErrors(res.sessionFile)
@@ -1102,6 +1308,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       // combo, and abort the whole matrix for manual recovery.
       if (res.apiError) {
         progress(`  ✗ ${step.sessionId}: terminal API failure (${res.apiError})`);
+        emit(`✘ ${ticketSeg}terminal API failure (${res.apiError})`);
         status = "error";
         apiError = res.apiError;
         break;
@@ -1206,9 +1413,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       err instanceof Error ? err.message : String(err);
     failReason = message;
     runLog(`[runMatrix] Combo ${question.name} × ${model.name} failed: ${message}`);
-    console.error(
-      `[runMatrix] Combo ${question.name} × ${model.name} failed: ${message}`
-    );
+    emit(`✘ error: ${message}`);
   }
 
   const outcome: RunComboOutcome = {
@@ -1380,6 +1585,7 @@ Options:
     piHome: join(repoRoot, ".pi-home"),
     tempRoot: join(tmpdir(), "llm-interview-runs"),
     maxTurns: config.maxTurns,
+    heartbeatSeconds: config.heartbeatSeconds,
     runRules: config.runRules,
   };
 
