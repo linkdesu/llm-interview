@@ -1285,6 +1285,29 @@ function printOutcomes(outcomes: RunComboOutcome[]): void {
 if (import.meta.main) {
   const args = process.argv.slice(2);
 
+  if (args.includes("--help")) {
+    console.log(`usage: bun run main [--question <names>] [--model <ids>] [--concurrency N]
+       bun run main resume <resume-file> [--concurrency N]
+
+Run the Matrix: every Question against every Model, one Combo at a time.
+
+Commands:
+  (default)                Run the Matrix, optionally filtered.
+  resume <resume-file>     Resume an interrupted Matrix from its Resume File
+                           (matrix-resume-<timestamp>.json). The recorded
+                           question/model filters are restored automatically,
+                           so --question/--model are not accepted here.
+
+Options:
+  --question <names>       Comma-separated Question names to run (default: all).
+  --model <ids>            Comma-separated Model ids to run (default: all).
+  --concurrency N          Question-level concurrency within one Model;
+                           must be a positive integer (default: 1). On resume,
+                           overrides the value recorded in the Resume File.
+  --help                   Show this help text and exit.`);
+    process.exit(0);
+  }
+
   // One positional subcommand, `resume <path>`: recovery is a deliberate
   // act that can never happen by accident. Everything else stays
   // flag-based.
@@ -1296,7 +1319,7 @@ if (import.meta.main) {
       flagArgs[0] && !flagArgs[0].startsWith("--") ? flagArgs.shift() : undefined;
     if (!resumePath) {
       console.error(
-        "usage: bun run run.ts resume <resume-file> [--concurrency N]"
+        "usage: bun run main resume <resume-file> [--concurrency N]"
       );
       process.exit(1);
     }
