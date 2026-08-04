@@ -13,6 +13,13 @@ import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { runLog } from "./run-log";
 import type { Question } from "./question";
+import {
+  formatToolCallEntry,
+  LOOP_SAMPLE_LOG_NAME,
+  type InvocationLoopMonitor,
+  type LoopDetector,
+  type LoopKillInfo,
+} from "./loop-detector";
 
 // runLog side only: the console channel is the compact progress view in
 // run.ts (driven by the onTurn/onApiRetry callbacks below), so pi-runner
@@ -37,6 +44,12 @@ interface InvocationState {
    * failure). Null when the invocation had no fatal API error.
    */
   apiFailure: string | null;
+  /**
+   * Loop detection (issue #21): per-invocation monitor fed from the event
+   * stream, and the kill verdict once the supervisor fires it.
+   */
+  loopMonitor?: InvocationLoopMonitor;
+  loopKill: LoopKillInfo | null;
 }
 
 /**
@@ -126,6 +139,22 @@ function processJsonEvent(
       // Final retry failure: pi gives up on the request but still exits 0,
       // so this is the runner's only reliable terminal-failure signal.
       state.apiFailure = String(event.finalError ?? "unknown API error");
+    }
+    return;
+  }
+
+  // --- Loop detection (work invocations only) ---
+  // Tool calls come from message_end assistant messages' toolCall content
+  // items; toolResults are never included (issue #21).
+  if (t === "message_end" && state.loopMonitor) {
+    const msg = event.message as Record<string, unknown> | undefined;
+    if (msg?.role === "assistant" && Array.isArray(msg.content)) {
+      const items = (msg.content as Array<Record<string, unknown>>).filter(
+        (item) => item?.type === "toolCall"
+      );
+      if (items.length > 0) {
+        state.loopMonitor.observeToolCall(formatToolCallEntry(items));
+      }
     }
     return;
   }
@@ -301,6 +330,20 @@ export interface InvocationOptions {
     maxAttempts: number;
     errorMessage: string;
   }) => void;
+  /**
+   * Loop detection (issue #21): when set, this WORK invocation's tool
+   * calls are fed to the Combo's detector; a kill verdict SIGKILLs pi and
+   * aborts the whole Combo. Evaluation invocations never set this.
+   */
+  loop?: {
+    detector: LoopDetector;
+    /** 1-based invocation index in execution order. */
+    invocationIndex: number;
+    /** 1-based ticket index (per-ticket Questions only). */
+    ticket?: number;
+    /** Line count of the prior segments of the concatenated session.jsonl. */
+    sessionLineOffset: number;
+  };
 }
 
 /**
@@ -328,6 +371,15 @@ export interface InvocationResult {
    * this signal — never on the exit code — to detect infrastructure failure.
    */
   apiError: string | null;
+  /**
+   * True if the process was killed because the loop detector judged the
+   * agent stuck in a non-productive repetition loop (issue #21).
+   */
+  loopDetected: boolean;
+  /** Confidence of the killing judgment (present when loopDetected). */
+  loopConfidence?: number;
+  /** Reason of the killing judgment (present when loopDetected). */
+  loopReason?: string;
 }
 
 /**
@@ -346,6 +398,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     killedForMaxTurns: false,
     maxTurns: options.maxTurns,
     apiFailure: null,
+    loopKill: null,
   };
 
   const {
@@ -406,6 +459,37 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     stdio: ["inherit", "pipe", "pipe"],
   });
 
+  // Loop detection (issue #21): monitor this work invocation's tool calls.
+  // A kill verdict SIGKILLs pi exactly like the max-turns kill; the
+  // `exited` guard keeps a late verdict from killing a finished process.
+  let exited = false;
+  state.loopMonitor = options.loop?.detector.beginInvocation({
+    invocationIndex: options.loop.invocationIndex,
+    ticket: options.loop.ticket,
+    sessionLineOffset: options.loop.sessionLineOffset,
+    resolveSessionFile: async () => {
+      try {
+        const entries = await readdir(sessionDir);
+        const fresh = entries.filter(
+          (f) =>
+            f.endsWith(".jsonl") &&
+            f !== LOOP_SAMPLE_LOG_NAME &&
+            !beforeJsonl.has(f)
+        );
+        return fresh.length > 0 ? join(sessionDir, fresh[0]) : null;
+      } catch {
+        return null;
+      }
+    },
+    onKill: (info) => {
+      state.loopKill = info;
+      if (!exited) {
+        log(`loop detected (confidence ${info.confidence}), killing process`);
+        child.kill("SIGKILL");
+      }
+    },
+  });
+
   // Collect all output (stdout + stderr) into chunks for the log file.
   // pi's stderr is captured here only — it is no longer forwarded to the
   // console (compact progress view); the pi-output log keeps it verbatim.
@@ -442,6 +526,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
 
   await new Promise<void>((resolve, reject) => {
     child.on("exit", (code) => {
+      exited = true;
       exitCode = code;
       resolve();
     });
@@ -449,10 +534,15 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
       reject(err);
     });
   });
+  // The invocation ended: detach so in-flight judgments stop observing and
+  // late verdicts cannot kill (the sample lines are still written).
+  state.loopMonitor?.detach();
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   if (state.killedForMaxTurns) {
     log(`killed after ${elapsed}s: max turns (${state.maxTurns}) exceeded`);
+  } else if (state.loopKill) {
+    log(`killed after ${elapsed}s: loop detected (confidence ${state.loopKill.confidence})`);
   } else {
     log(`exited with code ${exitCode} (${elapsed}s)`);
   }
@@ -469,8 +559,11 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   let sessionFile: string | null = null;
   try {
     const entries = await readdir(sessionDir);
+    // loop-detect.jsonl is the loop detector's sample log, never an
+    // invocation transcript (issue #21).
     const newJsonl = entries.filter(
-      (f) => f.endsWith(".jsonl") && !beforeJsonl.has(f)
+      (f) =>
+        f.endsWith(".jsonl") && f !== LOOP_SAMPLE_LOG_NAME && !beforeJsonl.has(f)
     );
 
     if (newJsonl.length >= 1) {
@@ -519,6 +612,9 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     sessionFile,
     stdoutFile,
     apiError,
+    loopDetected: state.loopKill !== null,
+    loopConfidence: state.loopKill?.confidence,
+    loopReason: state.loopKill?.reason ?? undefined,
   };
 }
 

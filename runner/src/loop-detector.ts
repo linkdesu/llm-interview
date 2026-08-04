@@ -23,6 +23,12 @@ const log = (msg: string) => {
   runLog(`[loop-detect] ${msg}`);
 };
 
+/**
+ * Sample log file name (next to the Run's session files). pi-runner must
+ * exclude it when discovering an invocation's new session JSONL.
+ */
+export const LOOP_SAMPLE_LOG_NAME = "loop-detect.jsonl";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------

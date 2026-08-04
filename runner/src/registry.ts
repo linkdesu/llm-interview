@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve, dirname } from "node:path";
 import { parse } from "smol-toml";
+import type { LoopDetectorConfig } from "./loop-detector";
 
 /**
  * A local LLM model entry in the registry.
@@ -32,6 +33,11 @@ export interface RunnerConfig {
   heartbeatSeconds: number;
   runRules: string;
   configDir: string;
+  /**
+   * Loop detection (issue #21): the optional [loop_detector] section.
+   * Absent = feature disabled, zero behavior change.
+   */
+  loopDetector?: LoopDetectorConfig;
 }
 
 function toPrimitive(v: unknown): string | number | boolean {
@@ -126,7 +132,54 @@ export async function loadConfig(path: string): Promise<RunnerConfig> {
     }
   }
 
-  return { models, maxTurns, heartbeatSeconds, runRules, configDir };
+  return { models, maxTurns, heartbeatSeconds, runRules, configDir, loopDetector: parseLoopDetectorSection(data.loop_detector) };
+}
+
+/**
+ * Parse the optional [loop_detector] section (issue #21). provider and
+ * modelId are required; step defaults to 5, confidence_threshold to 80.
+ */
+function parseLoopDetectorSection(raw: unknown): LoopDetectorConfig | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`Invalid config: "loop_detector" must be a table`);
+  }
+  const section = raw as Record<string, unknown>;
+
+  const provider = String(section.provider ?? "");
+  if (!provider.trim()) {
+    throw new Error(`Invalid config: "loop_detector.provider" must be a non-empty string`);
+  }
+  const modelId = String(section.modelId ?? "");
+  if (!modelId.trim()) {
+    throw new Error(`Invalid config: "loop_detector.modelId" must be a non-empty string`);
+  }
+
+  let step = 5;
+  if (section.step != null) {
+    if (
+      typeof section.step !== "number" ||
+      !Number.isInteger(section.step) ||
+      section.step < 1
+    ) {
+      throw new Error(`Invalid config: "loop_detector.step" must be a positive integer`);
+    }
+    step = section.step;
+  }
+
+  let confidenceThreshold = 80;
+  if (section.confidence_threshold != null) {
+    if (
+      typeof section.confidence_threshold !== "number" ||
+      section.confidence_threshold < 0 ||
+      section.confidence_threshold > 100
+    ) {
+      throw new Error(`Invalid config: "loop_detector.confidence_threshold" must be a number between 0 and 100`);
+    }
+    confidenceThreshold = section.confidence_threshold;
+  }
+
+  return { provider, modelId, step, confidenceThreshold };
 }
 
 /**
