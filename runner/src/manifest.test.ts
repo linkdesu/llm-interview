@@ -298,6 +298,48 @@ describe("buildManifest", () => {
   });
 
   // -----------------------------------------------------------------------
+  // Loop-defect fields pass through from run.json
+  // -----------------------------------------------------------------------
+  it("passes loop-defect fields through from run.json", async () => {
+    const { buildManifest } = await import("./manifest");
+
+    const run = fixtureRunJson({
+      comboId: "100pdefect00",
+      status: "error",
+      exitCode: null,
+      loopDetected: true,
+      loopConfidence: 95,
+      loopReason: "identical snapshot commands repeated",
+    });
+    await writeSession(sessionRoot, "q-snake", "model-alpha", "20260804-120000", run, {
+      "index.html": "<!DOCTYPE html>",
+    });
+
+    const manifest = await buildManifest({ sessionRoot, outDir });
+    expect(manifest.combos[0].loopDetected).toBe(true);
+    expect(manifest.combos[0].loopConfidence).toBe(95);
+    expect(manifest.combos[0].loopReason).toBe("identical snapshot commands repeated");
+  });
+
+  it("omits loop-defect fields when run.json has none", async () => {
+    const { buildManifest } = await import("./manifest");
+
+    await writeSession(
+      sessionRoot,
+      "q-snake",
+      "model-alpha",
+      "20260804-120000",
+      fixtureRunJson({ comboId: "n0100p000000" }),
+      { "index.html": "<!DOCTYPE html>" }
+    );
+
+    const manifest = await buildManifest({ sessionRoot, outDir });
+    expect(manifest.combos[0]).not.toHaveProperty("loopDetected");
+    expect(manifest.combos[0]).not.toHaveProperty("loopConfidence");
+    expect(manifest.combos[0]).not.toHaveProperty("loopReason");
+  });
+
+  // -----------------------------------------------------------------------
   // Test 7: Directories without a parseable run.json are skipped
   // -----------------------------------------------------------------------
   it("skips directories without run.json and excludes them from the manifest", async () => {

@@ -102,6 +102,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               <dt>Max turns</dt>
               <dd>{{ combo.maxTurns }}{{ combo.maxTurnsExceeded ? ' (exceeded)' : '' }}</dd>
             </template>
+            <template v-if="combo.loopDetected">
+              <dt>Loop detected</dt>
+              <dd class="panel-warning">
+                confidence {{ combo.loopConfidence
+                }}<template v-if="combo.loopReason"> — {{ combo.loopReason }}</template>
+              </dd>
+            </template>
           </dl>
         </section>
 

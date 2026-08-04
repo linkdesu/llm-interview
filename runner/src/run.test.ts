@@ -3879,3 +3879,396 @@ describe("resumeMatrix", () => {
     expect(await listDir(fixtures.sessionRoot)).toEqual([]);
   }, 30000);
 });
+
+// ---------------------------------------------------------------------------
+// Loop detection (issue #21): a [loop_detector] config section supervises
+// work invocations; a loop verdict at/above the confidence threshold kills
+// the Combo early and marks it as a loop defect.
+// ---------------------------------------------------------------------------
+describe("runMatrix loop detection", () => {
+  let tempRoot: string;
+  let piHome: string;
+  let runTempRoot: string;
+
+  const TOOL_CALL_EVENT =
+    '{"type":"message_end","message":{"role":"assistant","content":[' +
+    '{"type":"toolCall","id":"c1","name":"bash","arguments":{"command":"npx snapshot --full"}}]}}';
+
+  beforeEach(async () => {
+    tempRoot = makeTempRoot();
+    await mkdir(tempRoot, { recursive: true });
+    piHome = join(tempRoot, ".pi-home");
+    runTempRoot = join(tempRoot, "runs");
+    await mkdir(runTempRoot, { recursive: true });
+  });
+
+  afterAll(async () => {
+    try {
+      await rm(tempRoot, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  /**
+   * A repo fixture: one model, one question with `ticketCount` tickets, and
+   * a config.toml — with the [loop_detector] section when loopConfig is set.
+   */
+  async function writeLoopFixtures(
+    repoDir: string,
+    options: { ticketCount: number; loopConfig: boolean }
+  ): Promise<{ configPath: string; questionDir: string; sessionRoot: string }> {
+    const loopSection = options.loopConfig
+      ? `\n[loop_detector]\nprovider = "ornith"\nmodelId = "ai-01/ornith-1.0-35b-5"\n`
+      : "";
+    const configPath = join(repoDir, "config.toml");
+    await writeFile(
+      configPath,
+      `max_turns = 100\nrun_rules = ""\n\n[[models]]\nname = "model-alpha"\nprovider = "llamacpp-local"\nmodelId = "alpha.gguf"\n[models.params]\ntemp = 0.7\n${loopSection}`,
+      "utf-8"
+    );
+
+    const questionDir = join(repoDir, "questions");
+    const qDir = join(questionDir, "q-ticketed");
+    await mkdir(qDir, { recursive: true });
+    await writeFile(join(qDir, "intent.md"), "Build a multi-ticket project.", "utf-8");
+    const ticketLines = Array.from(
+      { length: options.ticketCount },
+      (_, i) => `[ ]${i + 1}. Ticket number ${i + 1}\n  - subtask`
+    ).join("\n");
+    await writeFile(join(qDir, "tickets.md"), `# Tickets\n\n${ticketLines}\n`, "utf-8");
+
+    return { configPath, questionDir, sessionRoot: join(repoDir, "session") };
+  }
+
+  /** Declare the ornith supervisor provider in the test piHome. */
+  async function writeSupervisorModelsJson(): Promise<void> {
+    await mkdir(piHome, { recursive: true });
+    await writeFile(
+      join(piHome, "models.json"),
+      JSON.stringify({
+        providers: {
+          ornith: {
+            baseUrl: "http://127.0.0.1:9/v1",
+            apiKey: "sk-test",
+            models: [{ id: "ai-01/ornith-1.0-35b-5" }],
+          },
+        },
+      }),
+      "utf-8"
+    );
+  }
+
+  /**
+   * A stub pi that writes a clean session + artifacts, emits `callCount`
+   * identical tool-call events, then either exits or idles (`sleep 30`)
+   * waiting for the runner's kill.
+   */
+  async function createToolCallStub(
+    stubPath: string,
+    options: { callCount: number; idle: boolean }
+  ): Promise<void> {
+    const script = `#!/usr/bin/env bash
+SESSION_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+echo '{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}' > "$SESSION_DIR/session.jsonl"
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+for i in $(seq 1 ${options.callCount}); do echo '${TOOL_CALL_EVENT}'; done
+${options.idle ? "sleep 30" : "exit 0"}
+`;
+    await writeFile(stubPath, script, "utf-8");
+    await chmod(stubPath, 0o755);
+  }
+
+  async function readArchivedRunJson(sessionRoot: string): Promise<RunJson> {
+    const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));
+    expect(dirs).toHaveLength(1);
+    return JSON.parse(
+      await readFile(
+        join(sessionRoot, "q-ticketed", "model-alpha", dirs[0], "run.json"),
+        "utf-8"
+      )
+    ) as RunJson;
+  }
+
+  it("kills a looping Combo early, marks it as a loop defect, and skips remaining tickets", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-loop-kill");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeLoopFixtures(repoDir, {
+      ticketCount: 3,
+      loopConfig: true,
+    });
+    await writeSupervisorModelsJson();
+
+    const stub = join(tempRoot, "stub-pi-loopkill");
+    await createToolCallStub(stub, { callCount: 12, idle: true });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      loopDetectorJudge: async () =>
+        '{"loop": true, "confidence": 95, "reason": "identical snapshot commands repeated"}',
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("error");
+    expect(results[0].loopDetected).toBe(true);
+    expect(results[0].exitCode).toBeNull();
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.status).toBe("error");
+    expect(runJson.loopDetected).toBe(true);
+    expect(runJson.loopConfidence).toBe(95);
+    expect(runJson.loopReason).toBe("identical snapshot commands repeated");
+    // The whole Combo was aborted: ticket 1 killed, tickets 2-3 never ran
+    expect(runJson.invocations).toHaveLength(1);
+
+    // loop-detect.jsonl sits next to session.jsonl with one line per judgment
+    const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));
+    const archiveDir = join(sessionRoot, "q-ticketed", "model-alpha", dirs[0]);
+    const sampleLog = (await readFile(join(archiveDir, "loop-detect.jsonl"), "utf-8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(sampleLog.length).toBeGreaterThanOrEqual(1);
+    expect(sampleLog[0].model).toBe("model-alpha");
+    expect(sampleLog[0].question).toBe("q-ticketed");
+    expect(sampleLog[0].sessionId).toBe("t1");
+    expect(sampleLog[0].sessionLines).toHaveLength(2);
+    expect(sampleLog.some((r) => r.killed === true)).toBe(true);
+  });
+
+  it("runs to normal completion when the supervisor judges no loop", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-loop-healthy");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeLoopFixtures(repoDir, {
+      ticketCount: 2,
+      loopConfig: true,
+    });
+    await writeSupervisorModelsJson();
+
+    const stub = join(tempRoot, "stub-pi-healthy");
+    await createToolCallStub(stub, { callCount: 6, idle: false });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      loopDetectorJudge: async () =>
+        '{"loop": false, "confidence": 92, "reason": "steady progress"}',
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("ok");
+    expect(results[0].loopDetected).toBeUndefined();
+
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.status).toBe("ok");
+    expect(runJson.loopDetected).toBeUndefined();
+    expect(runJson.invocations).toHaveLength(2);
+
+    // Judgments were still sampled (one per ticket invocation: 6 calls at step 5)
+    const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));
+    const sampleLog = (
+      await readFile(
+        join(sessionRoot, "q-ticketed", "model-alpha", dirs[0], "loop-detect.jsonl"),
+        "utf-8"
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(sampleLog).toHaveLength(2);
+    expect(sampleLog.every((r) => r.killed === false)).toBe(true);
+    expect(sampleLog.map((r) => r.sessionId)).toEqual(["t1", "t2"]);
+  });
+
+  it("runs to normal completion when the supervisor keeps failing", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-loop-sick");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeLoopFixtures(repoDir, {
+      ticketCount: 1,
+      loopConfig: true,
+    });
+    await writeSupervisorModelsJson();
+
+    const stub = join(tempRoot, "stub-pi-sick-supervisor");
+    await createToolCallStub(stub, { callCount: 10, idle: false });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      loopDetectorJudge: async () => null, // transport failure after retry
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("ok");
+    const runJson = await readArchivedRunJson(sessionRoot);
+    expect(runJson.loopDetected).toBeUndefined();
+  });
+
+  it("does nothing at all when the section is absent (feature disabled)", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-loop-disabled");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeLoopFixtures(repoDir, {
+      ticketCount: 1,
+      loopConfig: false,
+    });
+
+    const stub = join(tempRoot, "stub-pi-disabled");
+    await createToolCallStub(stub, { callCount: 10, idle: false });
+
+    let judgeCalls = 0;
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome, // no models.json at all — must not even be read
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      loopDetectorJudge: async () => {
+        judgeCalls++;
+        return null;
+      },
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("ok");
+    expect(judgeCalls).toBe(0);
+
+    const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));
+    const archiveFiles = await listDir(join(sessionRoot, "q-ticketed", "model-alpha", dirs[0]));
+    expect(archiveFiles).not.toContain("loop-detect.jsonl");
+  });
+
+  it("refuses to start the Matrix when the supervisor provider is missing from models.json", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-loop-noprovider");
+    await mkdir(repoDir, { recursive: true });
+    const { configPath, questionDir, sessionRoot } = await writeLoopFixtures(repoDir, {
+      ticketCount: 1,
+      loopConfig: true,
+    });
+    // piHome has a models.json, but without the ornith provider
+    await mkdir(piHome, { recursive: true });
+    await writeFile(join(piHome, "models.json"), JSON.stringify({ providers: {} }), "utf-8");
+
+    const stub = join(tempRoot, "stub-pi-noprovider");
+    await createToolCallStub(stub, { callCount: 1, idle: false });
+
+    await expect(
+      runMatrix({
+        questionDir,
+        configPath,
+        sessionRoot,
+        piBin: stub,
+        piHome,
+        tempRoot: runTempRoot,
+        piVersion: "test-1.0",
+        maxTurns: 100,
+        runRules: "",
+      })
+    ).rejects.toThrow(/loop_detector.*ornith/s);
+
+    // Nothing ran: no archive was produced
+    expect(await listDir(join(sessionRoot, "q-ticketed", "model-alpha"))).toHaveLength(0);
+  });
+
+  it("continues the Matrix with the next Combo after a loop kill", async () => {
+    const { runMatrix } = await import("./run");
+    const repoDir = join(tempRoot, "repo-loop-continue");
+    await mkdir(repoDir, { recursive: true });
+    // Two questions would need a custom fixture; instead run the SAME
+    // ticketed question for two models by adding a second model entry.
+    const loopSection = `\n[loop_detector]\nprovider = "ornith"\nmodelId = "ai-01/ornith-1.0-35b-5"\n`;
+    const configPath = join(repoDir, "config.toml");
+    await writeFile(
+      configPath,
+      `max_turns = 100\nrun_rules = ""\n\n` +
+        `[[models]]\nname = "model-alpha"\nprovider = "llamacpp-local"\nmodelId = "alpha.gguf"\n[models.params]\ntemp = 0.7\n\n` +
+        `[[models]]\nname = "model-beta"\nprovider = "llamacpp-local"\nmodelId = "beta.gguf"\n[models.params]\ntemp = 0.3\n` +
+        loopSection,
+      "utf-8"
+    );
+    const questionDir = join(repoDir, "questions");
+    const qDir = join(questionDir, "q-ticketed");
+    await mkdir(qDir, { recursive: true });
+    await writeFile(join(qDir, "intent.md"), "Build a multi-ticket project.", "utf-8");
+    await writeFile(
+      join(qDir, "tickets.md"),
+      `# Tickets\n\n[ ]1. Ticket number 1\n  - subtask\n[ ]2. Ticket number 2\n  - subtask\n`,
+      "utf-8"
+    );
+    const sessionRoot = join(repoDir, "session");
+    await writeSupervisorModelsJson();
+
+    const stub = join(tempRoot, "stub-pi-continue");
+    await createToolCallStub(stub, { callCount: 12, idle: true });
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: stub,
+      piHome,
+      tempRoot: runTempRoot,
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+      loopDetectorJudge: async () =>
+        '{"loop": true, "confidence": 95, "reason": "stuck in a rotation"}',
+    });
+
+    // Both Combos ran (the Matrix did not stop at the first loop kill);
+    // each was killed early and archived as a loop defect.
+    expect(results).toHaveLength(2);
+    for (const r of results) {
+      expect(r.status).toBe("error");
+      expect(r.loopDetected).toBe(true);
+    }
+    for (const model of ["model-alpha", "model-beta"]) {
+      const dirs = await listDir(join(sessionRoot, "q-ticketed", model));
+      expect(dirs).toHaveLength(1);
+      const runJson = JSON.parse(
+        await readFile(join(sessionRoot, "q-ticketed", model, dirs[0], "run.json"), "utf-8")
+      ) as RunJson;
+      expect(runJson.loopDetected).toBe(true);
+      expect(runJson.invocations).toHaveLength(1);
+    }
+  });
+});

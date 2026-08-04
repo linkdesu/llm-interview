@@ -12,6 +12,7 @@ import {
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { runLog } from "./run-log";
+import { formatToolCall, type LoopDetector } from "./loop-detector";
 import type { Question } from "./question";
 
 // runLog side only: the console channel is the compact progress view in
@@ -37,6 +38,12 @@ interface InvocationState {
    * failure). Null when the invocation had no fatal API error.
    */
   apiFailure: string | null;
+  /**
+   * 1-based ordinal of message_end events seen so far — used as the
+   * line reference into the invocation's session transcript for the loop
+   * detector's window records.
+   */
+  messageLines: number;
 }
 
 /**
@@ -126,6 +133,26 @@ function processJsonEvent(
       // Final retry failure: pi gives up on the request but still exits 0,
       // so this is the runner's only reliable terminal-failure signal.
       state.apiFailure = String(event.finalError ?? "unknown API error");
+    }
+    return;
+  }
+
+  // --- Loop detection: observe assistant tool calls live ---
+  if (t === "message_end") {
+    state.messageLines++;
+    const msg = event.message as Record<string, unknown> | undefined;
+    if (
+      options.loopDetector &&
+      msg?.role === "assistant" &&
+      Array.isArray(msg.content)
+    ) {
+      for (const item of msg.content as Array<Record<string, unknown>>) {
+        if (item.type !== "toolCall") continue;
+        options.loopDetector.observe({
+          text: formatToolCall(String(item.name ?? "unknown"), item.arguments),
+          line: state.messageLines,
+        });
+      }
     }
     return;
   }
@@ -301,6 +328,13 @@ export interface InvocationOptions {
     maxAttempts: number;
     errorMessage: string;
   }) => void;
+  /**
+   * Loop detector observing this invocation's tool calls (work invocations
+   * only; evaluation invocations are out of scope). The detector judges
+   * asynchronously and kills the pi process through its onKill wiring when
+   * a verdict crosses the confidence gate.
+   */
+  loopDetector?: LoopDetector;
 }
 
 /**
@@ -313,6 +347,16 @@ export interface InvocationResult {
   exitCode: number | null;
   /** True if the process was killed because it exceeded the max turn limit. */
   maxTurnsExceeded: boolean;
+  /**
+   * True if the process was killed because the loop detector judged the
+   * invocation a non-productive repetition loop at or above the configured
+   * confidence threshold — a loop defect, recorded as model behavior.
+   */
+  loopDetected: boolean;
+  /** Confidence of the kill verdict (only when loopDetected). */
+  loopConfidence?: number;
+  /** Reason cited by the supervisor for the kill verdict (only when loopDetected). */
+  loopReason?: string;
   /** Duration of the invocation in milliseconds. */
   durationMs: number;
   /**
@@ -346,6 +390,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     killedForMaxTurns: false,
     maxTurns: options.maxTurns,
     apiFailure: null,
+    messageLines: 0,
   };
 
   const {
@@ -406,6 +451,17 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     stdio: ["inherit", "pipe", "pipe"],
   });
 
+  // Loop-detector kill wiring: a verdict of loop:true at or above the
+  // confidence threshold kills the pi process (SIGKILL, same as the
+  // max-turns kill). Judging is asynchronous — the detector fires this
+  // callback from its own promise chain, never blocking the event stream.
+  if (options.loopDetector) {
+    options.loopDetector.onKill = (verdict) => {
+      log(`loop detected (confidence ${verdict.confidence}), killing process`);
+      child.kill("SIGKILL");
+    };
+  }
+
   // Collect all output (stdout + stderr) into chunks for the log file.
   // pi's stderr is captured here only — it is no longer forwarded to the
   // console (compact progress view); the pi-output log keeps it verbatim.
@@ -451,7 +507,14 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   });
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  if (state.killedForMaxTurns) {
+  // Await in-flight supervisor judgments: the pi process has exited, so
+  // this never blocks the invocation itself — it only completes the
+  // loop-detect.jsonl sample log and settles a late kill verdict.
+  await options.loopDetector?.flush();
+  const killVerdict = options.loopDetector?.killVerdict ?? null;
+  if (killVerdict) {
+    log(`killed after ${elapsed}s: loop detected (confidence ${killVerdict.confidence})`);
+  } else if (state.killedForMaxTurns) {
     log(`killed after ${elapsed}s: max turns (${state.maxTurns}) exceeded`);
   } else {
     log(`exited with code ${exitCode} (${elapsed}s)`);
@@ -469,8 +532,10 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
   let sessionFile: string | null = null;
   try {
     const entries = await readdir(sessionDir);
+    // loop-detect.jsonl is the runner's own bookkeeping (loop detector
+    // sample log), never a pi session file.
     const newJsonl = entries.filter(
-      (f) => f.endsWith(".jsonl") && !beforeJsonl.has(f)
+      (f) => f.endsWith(".jsonl") && f !== "loop-detect.jsonl" && !beforeJsonl.has(f)
     );
 
     if (newJsonl.length >= 1) {
@@ -515,6 +580,9 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     sessionId,
     exitCode,
     maxTurnsExceeded: state.killedForMaxTurns,
+    loopDetected: killVerdict !== null,
+    loopConfidence: killVerdict?.confidence,
+    loopReason: killVerdict?.reason,
     durationMs,
     sessionFile,
     stdoutFile,

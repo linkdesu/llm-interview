@@ -35,6 +35,9 @@ export interface ComboEntry {
   contractViolations: string[]
   maxTurnsExceeded?: boolean
   maxTurns?: number
+  loopDetected?: boolean
+  loopConfidence?: number
+  loopReason?: string
   files: ComboFiles
 }
 

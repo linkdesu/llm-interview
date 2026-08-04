@@ -9,6 +9,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { pid } from "node:process";
+import { LoopDetector } from "./loop-detector";
 import type { Question } from "./question";
 
 // ---------------------------------------------------------------------------
@@ -758,5 +759,178 @@ describe("assertModelsAvailable", () => {
         { provider: "openai", modelId: "gpt-5" },
       ])
     ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Loop detection at the stub-pi seam: the extractor observes tool calls from
+// the stdout event stream; a kill verdict SIGKILLs the process.
+// ---------------------------------------------------------------------------
+describe("runInvocation loop detection", () => {
+  const TOOL_CALL_EVENT =
+    '{"type":"message_end","message":{"role":"assistant","content":[' +
+    '{"type":"toolCall","id":"c1","name":"bash","arguments":{"command":"npx snapshot --full"}}]}}';
+
+  function makeDetector(judge: (window: string[]) => Promise<string | null>, logPath: string) {
+    return new LoopDetector({
+      step: 5,
+      confidenceThreshold: 80,
+      judge,
+      logPath,
+      identity: { model: "model-alpha", question: "q-hello", sessionId: "t1" },
+    });
+  }
+
+  async function writeStub(name: string, body: string): Promise<string> {
+    const path = join(stubBinDir, name);
+    await writeFile(path, `#!/bin/sh\n${body}\n`);
+    await Bun.$`chmod +x ${path}`;
+    return path;
+  }
+
+  it("kills the pi process early when the supervisor judges a loop", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-loop-kill");
+    await setupQuestionDir(dir, {});
+
+    // Emit 12 identical tool calls, then idle until the runner kills us.
+    const stub = await writeStub(
+      "pi-looping",
+      `for i in $(seq 1 12); do echo '${TOOL_CALL_EVENT}'; done\nsleep 30`
+    );
+
+    const tempRoot = join(testRoot, "tmp-inv-loop-kill");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const logPath = join(testRoot, "loop-detect-kill.jsonl");
+    const detector = makeDetector(async () =>
+      '{"loop": true, "confidence": 95, "reason": "12 identical snapshot commands"}',
+      logPath
+    );
+
+    const result = await runInvocation({
+      prompt: "Loop forever",
+      workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stub,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+      loopDetector: detector,
+    });
+
+    expect(result.loopDetected).toBe(true);
+    expect(result.loopConfidence).toBe(95);
+    expect(result.loopReason).toBe("12 identical snapshot commands");
+    // Killed (null exit code) long before the stub's 30s idle ends
+    expect(result.exitCode).toBeNull();
+    expect(result.durationMs).toBeLessThan(30_000);
+
+    // The judgment was sampled with line references, never turn content
+    const lines = (await readFile(logPath, "utf-8")).trim().split("\n");
+    const records = lines.map((l) => JSON.parse(l));
+    // 12 calls at step 5 → judgments at call 5 and 10; exactly one kills
+    expect(records.filter((r) => r.killed === true)).toHaveLength(1);
+    const killRecord = records.find((r) => r.killed === true);
+    expect(killRecord.sessionLines).toHaveLength(2);
+    expect(JSON.stringify(killRecord)).not.toContain("npx snapshot");
+  });
+
+  it("passes formatted tool calls to the judge and ignores non-toolCall content", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-loop-extract");
+    await setupQuestionDir(dir, {});
+
+    // 5 bash tool calls interleaved with a text-only assistant message and a
+    // toolResult-role message_end — only the 5 tool calls may be observed.
+    const textEvent =
+      '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"checking"}]}}';
+    const toolResultEvent =
+      '{"type":"message_end","message":{"role":"toolResult","toolName":"bash","content":[{"type":"text","text":"ok"}]}}';
+    const stub = await writeStub(
+      "pi-mixed-events",
+      [
+        `echo '${TOOL_CALL_EVENT}'`,
+        `echo '${textEvent}'`,
+        `echo '${TOOL_CALL_EVENT}'`,
+        `echo '${toolResultEvent}'`,
+        `echo '${TOOL_CALL_EVENT}'`,
+        `echo '${TOOL_CALL_EVENT}'`,
+        `echo '${TOOL_CALL_EVENT}'`,
+        "exit 0",
+      ].join("\n")
+    );
+
+    const tempRoot = join(testRoot, "tmp-inv-loop-extract");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const windows: string[][] = [];
+    const logPath = join(testRoot, "loop-detect-extract.jsonl");
+    const detector = makeDetector(async (window) => {
+      windows.push(window);
+      return '{"loop": false, "confidence": 90, "reason": "healthy"}';
+    }, logPath);
+
+    const result = await runInvocation({
+      prompt: "Work normally",
+      workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stub,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+      loopDetector: detector,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.loopDetected).toBe(false);
+    // Exactly one judgment (5 observed calls at step 5), formatted window
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toHaveLength(5);
+    expect(windows[0][0]).toBe("[bash] npx snapshot --full");
+  });
+
+  it("never kills when the supervisor fails", async () => {
+    const { setupWorkdir, runInvocation } = await import("./pi-runner");
+    const { question, dir } = makeMockQuestion("inv-loop-sick");
+    await setupQuestionDir(dir, {});
+
+    const stub = await writeStub(
+      "pi-five-calls",
+      `for i in $(seq 1 5); do echo '${TOOL_CALL_EVENT}'; done\nexit 0`
+    );
+
+    const tempRoot = join(testRoot, "tmp-inv-loop-sick");
+    await mkdir(tempRoot, { recursive: true });
+    const setup = await setupWorkdir(question, tempRoot);
+
+    const logPath = join(testRoot, "loop-detect-sick.jsonl");
+    const detector = makeDetector(async () => null, logPath); // transport failure
+
+    const result = await runInvocation({
+      prompt: "Work normally",
+      workdir: setup.workdir,
+      sessionDir: setup.sessionDir,
+      sessionId: "t1",
+      extraArgs: setup.extraArgs,
+      provider: "llamacpp-local",
+      modelId: "my-model",
+      piBin: stub,
+      piHome: await makePiHome(),
+      maxTurns: 100,
+      loopDetector: detector,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.loopDetected).toBe(false);
+    expect(result.maxTurnsExceeded).toBe(false);
   });
 });

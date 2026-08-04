@@ -19,6 +19,22 @@ export interface RegistryModel {
 }
 
 /**
+ * The optional [loop_detector] section: when present, work invocations are
+ * supervised for non-productive repetition loops (see loop-detector.ts).
+ * Section absent = feature disabled.
+ */
+export interface LoopDetectorConfig {
+  /** Supervisor provider name in <piHome>/models.json (e.g. "ornith"). */
+  provider: string;
+  /** Supervisor model id (e.g. "ai-01/ornith-1.0-35b-5"). */
+  modelId: string;
+  /** Judge every `step` new tool calls (default 5; > 10 acts as spot-check). */
+  step: number;
+  /** Minimum verdict confidence that kills the Combo (default 80). */
+  confidenceThreshold: number;
+}
+
+/**
  * Full runner configuration loaded from config.toml.
  */
 export interface RunnerConfig {
@@ -32,6 +48,8 @@ export interface RunnerConfig {
   heartbeatSeconds: number;
   runRules: string;
   configDir: string;
+  /** Loop detection settings, or undefined when the section is absent. */
+  loopDetector?: LoopDetectorConfig;
 }
 
 function toPrimitive(v: unknown): string | number | boolean {
@@ -96,6 +114,36 @@ function validateModels(rawModels: unknown[]): RegistryModel[] {
   return result;
 }
 
+function validateLoopDetector(raw: unknown): LoopDetectorConfig {
+  const entry = (raw ?? {}) as Record<string, unknown>;
+  const label = "[loop_detector]";
+
+  const provider = String(entry.provider ?? "");
+  if (!provider.trim()) throw new Error(`Invalid config ${label}: "provider" must be a non-empty string`);
+
+  const modelId = String(entry.modelId ?? "");
+  if (!modelId.trim()) throw new Error(`Invalid config ${label}: "modelId" must be a non-empty string`);
+
+  let step = 5;
+  if (entry.step != null) {
+    if (typeof entry.step !== "number" || !Number.isInteger(entry.step) || entry.step < 1) {
+      throw new Error(`Invalid config ${label}: "step" must be a positive integer`);
+    }
+    step = entry.step;
+  }
+
+  let confidenceThreshold = 80;
+  if (entry.confidence_threshold != null) {
+    const c = entry.confidence_threshold;
+    if (typeof c !== "number" || !Number.isInteger(c) || c < 1 || c > 100) {
+      throw new Error(`Invalid config ${label}: "confidence_threshold" must be an integer between 1 and 100`);
+    }
+    confidenceThreshold = c;
+  }
+
+  return { provider, modelId, step, confidenceThreshold };
+}
+
 /**
  * Load and validate the full runner configuration from a TOML file.
  */
@@ -126,7 +174,10 @@ export async function loadConfig(path: string): Promise<RunnerConfig> {
     }
   }
 
-  return { models, maxTurns, heartbeatSeconds, runRules, configDir };
+  const loopDetector =
+    data.loop_detector != null ? validateLoopDetector(data.loop_detector) : undefined;
+
+  return { models, maxTurns, heartbeatSeconds, runRules, configDir, loopDetector };
 }
 
 /**
