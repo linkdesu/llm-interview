@@ -341,4 +341,41 @@ describe("buildManifest", () => {
     expect(await listDir(join(outDir, "sessions"))).toEqual(["aaaa1111bbbb"]);
     expect(await readFile(join(outDir, "index.html"), "utf-8")).toBe("dashboard shell");
   });
+
+  // -----------------------------------------------------------------------
+  // Test 9: Loop-defect fields pass through (issue #21)
+  // -----------------------------------------------------------------------
+  it("carries loopDetected/loopConfidence/loopReason into the manifest", async () => {
+    const { buildManifest } = await import("./manifest");
+
+    await writeSession(sessionRoot, "q-snake", "model-alpha", "20260723-233227", fixtureRunJson({
+      status: "error",
+      exitCode: null,
+      loopDetected: true,
+      loopConfidence: 95,
+      loopReason: "10 identical snapshot commands",
+    }), {
+      "index.html": "<!DOCTYPE html>",
+    });
+
+    const manifest = await buildManifest({ sessionRoot, outDir });
+
+    expect(manifest.combos[0].loopDetected).toBe(true);
+    expect(manifest.combos[0].loopConfidence).toBe(95);
+    expect(manifest.combos[0].loopReason).toBe("10 identical snapshot commands");
+  });
+
+  it("omits loop-defect fields when run.json does not record them", async () => {
+    const { buildManifest } = await import("./manifest");
+
+    await writeSession(sessionRoot, "q-snake", "model-alpha", "20260723-233227", fixtureRunJson(), {
+      "index.html": "<!DOCTYPE html>",
+    });
+
+    const manifest = await buildManifest({ sessionRoot, outDir });
+
+    expect(manifest.combos[0]).not.toHaveProperty("loopDetected");
+    expect(manifest.combos[0]).not.toHaveProperty("loopConfidence");
+    expect(manifest.combos[0]).not.toHaveProperty("loopReason");
+  });
 });

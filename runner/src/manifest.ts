@@ -21,8 +21,16 @@ const warn = (msg: string) => {
  * Older run.json files may predate newer RunJson fields — parse leniently
  * and carry those fields through only when present.
  */
-type ArchivedRunJson = Omit<RunJson, "maxTurns" | "maxTurnsExceeded"> &
-  Partial<Pick<RunJson, "maxTurns" | "maxTurnsExceeded">>;
+type ArchivedRunJson = Omit<
+  RunJson,
+  "maxTurns" | "maxTurnsExceeded" | "loopDetected" | "loopConfidence" | "loopReason"
+> &
+  Partial<
+    Pick<
+      RunJson,
+      "maxTurns" | "maxTurnsExceeded" | "loopDetected" | "loopConfidence" | "loopReason"
+    >
+  >;
 
 /**
  * One Combo entry in the generated Manifest (see docs/spec.md).
@@ -52,6 +60,12 @@ export interface ManifestCombo {
   maxTurnsExceeded?: boolean;
   /** Present only when recorded in run.json. */
   maxTurns?: number;
+  /** Loop-defect marking (issue #21); present only when recorded. */
+  loopDetected?: boolean;
+  /** Present only when recorded in run.json. */
+  loopConfidence?: number;
+  /** Present only when recorded in run.json. */
+  loopReason?: string;
   /**
    * Files published for this combo, keyed by role; paths relative to outDir.
    * Only files that actually exist in the Session are listed.
@@ -218,6 +232,9 @@ export async function buildManifest(
     };
     if (run.maxTurnsExceeded !== undefined) combo.maxTurnsExceeded = run.maxTurnsExceeded;
     if (run.maxTurns !== undefined) combo.maxTurns = run.maxTurns;
+    if (run.loopDetected !== undefined) combo.loopDetected = run.loopDetected;
+    if (run.loopConfidence !== undefined) combo.loopConfidence = run.loopConfidence;
+    if (run.loopReason !== undefined) combo.loopReason = run.loopReason;
     combos.push(combo);
   }
 
