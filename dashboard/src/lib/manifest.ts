@@ -35,6 +35,10 @@ export interface ComboEntry {
   contractViolations: string[]
   maxTurnsExceeded?: boolean
   maxTurns?: number
+  /** Loop-defect marking (issue #21); present only when recorded in run.json. */
+  loopDetected?: boolean
+  loopConfidence?: number
+  loopReason?: string
   files: ComboFiles
 }
 
