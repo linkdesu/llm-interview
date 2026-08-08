@@ -18,7 +18,7 @@ import {
   loadResumeFile,
   type ResumeRemainingCombo,
 } from "./resume";
-import { loadConfig, loadRegistry, type RegistryModel } from "./registry";
+import { loadConfig, type RegistryModel } from "./registry";
 import { loadQuestions, type Question, type Ticket } from "./question";
 import {
   buildPrompt,
@@ -35,6 +35,14 @@ import {
   type PiEnvironment,
   type WorkdirSetup,
 } from "./pi-runner";
+import {
+  LoopDetector,
+  resolveSupervisor,
+  LOOP_SAMPLE_LOG_NAME,
+  type JudgeFn,
+  type LoopDetectorConfig,
+  type SupervisorEndpoint,
+} from "./loop-detector";
 
 // ---------------------------------------------------------------------------
 // Compact console progress view
@@ -157,6 +165,13 @@ export interface RunMatrixOptions extends PiEnvironment {
    * entries were loaded from, so the resumed Matrix keeps updating it.
    */
   resumeRemaining?: ResumeRemainingCombo[];
+  /**
+   * Loop detection judging seam (issue #21): injected by tests to stub
+   * the supervisor; production leaves it undefined and the detector calls
+   * the supervisor over HTTP. Ignored when config.toml has no
+   * [loop_detector] section.
+   */
+  loopJudge?: JudgeFn;
 }
 
 /**
@@ -254,6 +269,11 @@ export interface InvocationRecord {
   /** True if this invocation was killed for exceeding the max turn limit. */
   maxTurnsExceeded: boolean;
   /**
+   * True if this invocation was killed by the loop detector (issue #21).
+   * Present only on the killed invocation.
+   */
+  loopDetected?: boolean;
+  /**
    * Terminal API failure (e.g. connection loss after all retries), or
    * undefined. Always aborts the whole matrix — see RunJson.apiError.
    */
@@ -302,6 +322,17 @@ export interface RunJson {
    * usually a sign the agent looped or could not solve the task.
    */
   maxTurnsExceeded: boolean;
+  /**
+   * True if the run was killed by the loop detector: the supervisor
+   * judged the agent stuck in a non-productive repetition loop
+   * (issue #21). A loop defect is itself an observable model behavior.
+   * Present only when the [loop_detector] section is configured.
+   */
+  loopDetected?: boolean;
+  /** Confidence of the killing judgment (present when loopDetected). */
+  loopConfidence?: number;
+  /** Reason of the killing judgment (present when loopDetected). */
+  loopReason?: string;
   /**
    * Effective max turn limit for this run (model-level override if set,
    * otherwise the global config value).
@@ -471,6 +502,24 @@ async function concatenateSessions(
 }
 
 /**
+ * Total line count of session segments as they will appear in the
+ * concatenated session.jsonl (trailing newlines stripped, see
+ * concatenateSessions) — the loop detector's line-reference offset.
+ */
+async function countSessionLines(sessionFiles: string[]): Promise<number> {
+  let total = 0;
+  for (const f of sessionFiles) {
+    try {
+      const content = (await readFile(f, "utf-8")).replace(/\n+$/, "");
+      total += content.length === 0 ? 0 : content.split("\n").length;
+    } catch {
+      // A missing segment contributes no lines.
+    }
+  }
+  return total;
+}
+
+/**
  * Filter items by name. Throws with a list of available names on unknown filters.
  */
 function applyNameFilter<T>(
@@ -544,7 +593,8 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   }
 
   // Load registry and questions
-  const models = await loadRegistry(configPath);
+  const config = await loadConfig(configPath);
+  const models = config.models;
   const questions = await loadQuestions(questionDir);
 
   const filteredModels = applyNameFilter(models, modelFilter, "model", (m) => m.modelId);
@@ -569,6 +619,26 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
   // Fail fast on model id typos: pi runs unknown ids as "custom models"
   // instead of erroring, which would silently burn the whole matrix.
   await assertModelsAvailable(piHome, filteredModels);
+
+  // Loop detection (issue #21): the [loop_detector] section enables the
+  // supervisor. Resolve its endpoint at config-validation time — a
+  // provider missing from models.json refuses to start the Matrix, same
+  // spirit as assertModelsAvailable. Absent section = feature disabled.
+  let loop:
+    | {
+        config: LoopDetectorConfig;
+        supervisor: SupervisorEndpoint;
+        judge?: JudgeFn;
+      }
+    | undefined;
+  if (config.loopDetector) {
+    const supervisor = await resolveSupervisor(piHome, config.loopDetector);
+    loop = { config: config.loopDetector, supervisor, judge: options.loopJudge };
+    log(
+      `loop detection enabled: supervisor ${config.loopDetector.provider}/${config.loopDetector.modelId} ` +
+        `(step ${config.loopDetector.step}, threshold ${config.loopDetector.confidenceThreshold})`
+    );
+  }
 
   // Pre-compute the full combo list for progress tracking
   type ComboPlan = {
@@ -755,6 +825,7 @@ export async function runMatrix(options: RunMatrixOptions): Promise<RunComboOutc
           runRules,
           adoptedRun: plan.adoptedRun,
           heartbeatState,
+          loop,
           onRunDirReady: resume
             ? (runDir) => resume.comboStarted(comboId, runDir)
             : undefined,
@@ -974,6 +1045,15 @@ interface RunComboParams {
     runDir: string;
     completedInvocations: InvocationRecord[];
   };
+  /**
+   * Loop detection settings (issue #21): present when config.toml has a
+   * [loop_detector] section. The combo creates its detector from these.
+   */
+  loop?: {
+    config: LoopDetectorConfig;
+    supervisor: SupervisorEndpoint;
+    judge?: JudgeFn;
+  };
 }
 
 /**
@@ -1007,6 +1087,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
     onInvocationComplete,
     heartbeatState,
     adoptedRun,
+    loop,
   } = params;
 
   // Combo-scoped console emission in the compact progress format. Elapsed
@@ -1029,6 +1110,11 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
   let durationMs: number;
   let endedAt: string;
   let maxTurnsExceeded = false;
+  // Loop-defect marking (issue #21): set when the supervisor's kill
+  // verdict aborted this Combo.
+  let loopDetected = false;
+  let loopConfidence: number | undefined;
+  let loopReason: string | undefined;
   // Exception message when the combo crashed without archiving.
   let failReason: string | undefined;
   // Terminal API failure that aborts the whole matrix (recorded in
@@ -1101,6 +1187,19 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
     if (!setup) {
       setup = await setupWorkdir(question, tempRoot);
     }
+
+    // Combo-scoped loop detector (issue #21): judges windows of the work
+    // invocations' tool calls in the background; its sample log lives in
+    // the session dir and is archived next to session.jsonl.
+    const detector = loop
+      ? new LoopDetector({
+          config: loop.config,
+          supervisor: loop.supervisor,
+          combo: { model: model.name, question: question.name },
+          sampleLogPath: join(setup.sessionDir, LOOP_SAMPLE_LOG_NAME),
+          judge: loop.judge,
+        })
+      : null;
     runLog(
       `=== Combo ${comboIndex}/${total} START: ${label} (${basename(setup.runDir)}) ===`
     );
@@ -1274,6 +1373,18 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         piHome,
         maxTurns: effectiveMaxTurns,
         ...invocationCallbacks(ticketSeg),
+        // Loop detection monitors WORK invocations only — evaluation
+        // invocations (arbitrateDirtyTicket) never get a monitor.
+        ...(detector
+          ? {
+              loop: {
+                detector,
+                invocationIndex: sessionFiles.length + 1,
+                ticket: step.ticket?.index,
+                sessionLineOffset: await countSessionLines(sessionFiles),
+              },
+            }
+          : {}),
       });
 
       if (res.sessionFile) sessionFiles.push(res.sessionFile);
@@ -1281,6 +1392,11 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       if (res.maxTurnsExceeded) {
         maxTurnsExceeded = true;
         emit(`✘ ${ticketSeg}killed: max turns (${effectiveMaxTurns}) exceeded`);
+      }
+      if (res.loopDetected) {
+        loopDetected = true;
+        loopConfidence = res.loopConfidence;
+        loopReason = res.loopReason;
       }
 
       const toolErrors = res.sessionFile
@@ -1297,11 +1413,22 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         status: res.exitCode === 0 && !res.maxTurnsExceeded && !res.apiError ? "ok" : "error",
         exitCode: res.exitCode,
         maxTurnsExceeded: res.maxTurnsExceeded,
+        loopDetected: res.loopDetected || undefined,
         apiError: res.apiError ?? undefined,
         durationMs: res.durationMs,
       };
       invocations.push(record);
       onInvocationComplete?.(record);
+
+      // Loop kill (issue #21): the Combo is a loop defect — skip
+      // evaluation and all remaining tickets and archive it as "error",
+      // but let the Matrix continue with the next Combo.
+      if (res.loopDetected) {
+        progress(`  ✗ ${step.sessionId}: loop detected (confidence ${res.loopConfidence}) — aborting the Combo`);
+        emit(`✘ ${ticketSeg}loop detected (confidence ${res.loopConfidence}) — combo killed`);
+        status = "error";
+        break;
+      }
 
       // Infrastructure failure (network outage etc.): every subsequent
       // invocation would fail the same way, so skip evaluation, fail the
@@ -1348,6 +1475,22 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       archivedSessionJsonl = join(archiveDir, "session.jsonl");
     }
 
+    // Loop detection: settle in-flight judgments now that every
+    // invocation has ended (judging never blocked them), then archive
+    // loop-detect.jsonl next to session.jsonl.
+    if (detector) {
+      await detector.close();
+      try {
+        await copyFile(
+          join(setup.sessionDir, LOOP_SAMPLE_LOG_NAME),
+          join(archiveDir, LOOP_SAMPLE_LOG_NAME)
+        );
+      } catch (err) {
+        // No judgments at all → no sample log → nothing to archive.
+        if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") throw err;
+      }
+    }
+
     // Strip image data from session.jsonl to keep archive size manageable
     await stripSessionImageData(archiveDir);
 
@@ -1391,6 +1534,16 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       invocations: perTicket ? invocations : undefined,
       apiError,
     };
+
+    // Loop-defect marking (issue #21): recorded only when the feature is
+    // configured — a disabled detector leaves run.json untouched.
+    if (detector) {
+      runJson.loopDetected = loopDetected;
+      if (loopDetected) {
+        runJson.loopConfidence = loopConfidence;
+        runJson.loopReason = loopReason;
+      }
+    }
 
     await writeFile(
       join(archiveDir, "run.json"),

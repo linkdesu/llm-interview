@@ -52,6 +52,9 @@ async function toggleTranscript() {
       <p v-if="combo.maxTurnsExceeded" class="combo-warning">
         max turns ({{ combo.maxTurns }}) exceeded
       </p>
+      <p v-if="combo.loopDetected" class="combo-warning">
+        loop detected (confidence {{ combo.loopConfidence }}): {{ combo.loopReason }}
+      </p>
       <p v-if="combo.contractViolations.length > 0" class="combo-warning">
         Contract violations: {{ combo.contractViolations.join('; ') }}
       </p>

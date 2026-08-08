@@ -156,3 +156,94 @@ max_turns = 0
     }
   });
 });
+
+describe("loadConfig [loop_detector]", () => {
+  const base = `
+max_turns = 100
+run_rules = ""
+
+[[models]]
+name = "test-model"
+provider = "llamacpp-local"
+modelId = "test-model-id"
+[models.params]
+temp = 0.7
+`;
+
+  it("is disabled when the section is absent", async () => {
+    const path = createTempFile(base);
+    try {
+      const { loadConfig } = await import("./registry");
+      const config = await loadConfig(path);
+      expect(config.loopDetector).toBeUndefined();
+    } finally {
+      cleanup(path);
+    }
+  });
+
+  it("applies the defaults (step 5, confidence threshold 80)", async () => {
+    const path = createTempFile(`
+[loop_detector]
+provider = "ornith"
+modelId = "ai-01/ornith-1.0-35b-5"
+` + base);
+    try {
+      const { loadConfig } = await import("./registry");
+      const config = await loadConfig(path);
+      expect(config.loopDetector).toEqual({
+        provider: "ornith",
+        modelId: "ai-01/ornith-1.0-35b-5",
+        step: 5,
+        confidenceThreshold: 80,
+      });
+    } finally {
+      cleanup(path);
+    }
+  });
+
+  it("honours a custom step and confidence threshold", async () => {
+    const path = createTempFile(`
+[loop_detector]
+provider = "ornith"
+modelId = "ai-01/ornith-1.0-35b-5"
+step = 15
+confidence_threshold = 90
+` + base);
+    try {
+      const { loadConfig } = await import("./registry");
+      const config = await loadConfig(path);
+      expect(config.loopDetector?.step).toBe(15);
+      expect(config.loopDetector?.confidenceThreshold).toBe(90);
+    } finally {
+      cleanup(path);
+    }
+  });
+
+  it("rejects a section without provider or modelId", async () => {
+    const path = createTempFile(`
+[loop_detector]
+provider = "ornith"
+` + base);
+    try {
+      const { loadConfig } = await import("./registry");
+      await expect(loadConfig(path)).rejects.toThrow(/loop_detector.*modelId/);
+    } finally {
+      cleanup(path);
+    }
+  });
+
+  it("rejects a non-positive step", async () => {
+    const path = createTempFile(`
+[loop_detector]
+provider = "ornith"
+modelId = "ai-01/ornith-1.0-35b-5"
+step = 0
+` + base);
+    try {
+      const { loadConfig } = await import("./registry");
+      await expect(loadConfig(path)).rejects.toThrow(/loop_detector.*step/);
+    } finally {
+      cleanup(path);
+    }
+  });
+});
