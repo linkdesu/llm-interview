@@ -265,6 +265,8 @@ export class LoopDetector {
   private readonly identity: LoopDetectorIdentity;
   private readonly calls: ObservedToolCall[] = [];
   private readonly pending: Promise<void>[] = [];
+  /** Serializes sample-log appends so lines stay in judgment order. */
+  private appendTail: Promise<void> = Promise.resolve();
   private _killVerdict: LoopVerdict | null = null;
 
   constructor(options: {
@@ -337,11 +339,14 @@ export class LoopDetector {
       killed,
       judgedAt: new Date().toISOString(),
     };
-    try {
-      await appendFile(this.logPath, JSON.stringify(record) + "\n", "utf-8");
-    } catch (err) {
-      log(`failed to append to ${this.logPath}: ${err}`);
-    }
+    // Serialize appends: concurrent appendFile calls to the same path can
+    // land out of order, scrambling the audit log's chronology.
+    this.appendTail = this.appendTail
+      .then(() =>
+        appendFile(this.logPath, JSON.stringify(record) + "\n", "utf-8")
+      )
+      .catch((err) => log(`failed to append to ${this.logPath}: ${err}`));
+    await this.appendTail;
 
     if (killed) {
       log(
