@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { parseTrajectory, type Trajectory } from './lib/trajectory'
+import RunStatsBar from './components/RunStatsBar.vue'
 import TrajectoryView from './components/TrajectoryView.vue'
 
 // View of the GET /sessions contract. The server-side source of truth lives
@@ -222,24 +223,27 @@ async function selectRun(question: string, model: string, datetime: string) {
       </aside>
       <main class="page">
         <template v-if="selected === null">
-          <h1 class="page-title">Analyzer</h1>
-          <p class="page-lede">
-            Operator-facing inspector for the archived Session archive: full
-            history and trajectory diagnosis. Select a run in the sidebar to
-            inspect its trajectory.
-          </p>
+          <div class="page-hero">
+            <h1 class="page-title">Analyzer</h1>
+            <p class="page-lede">
+              Operator-facing inspector for the archived Session archive: full
+              history and trajectory diagnosis. Select a run in the sidebar to
+              inspect its trajectory.
+            </p>
+          </div>
         </template>
         <template v-else>
           <header class="run-header">
             <p class="micro run-path">{{ selected.question }} · {{ selected.model }}</p>
             <h1 class="page-title run-title">{{ selected.datetime }}</h1>
           </header>
-          <p v-if="detailStatus === 'loading'" class="micro muted">Loading transcript…</p>
-          <p v-else-if="detailStatus === 'no-transcript'" class="page-lede">
+          <RunStatsBar v-if="trajectory !== null" :records="trajectory.records" />
+          <p v-if="detailStatus === 'loading'" class="page-note micro muted">Loading transcript…</p>
+          <p v-else-if="detailStatus === 'no-transcript'" class="page-note page-lede">
             This archived run has no transcript (pre-JSONL archive format).
           </p>
-          <p v-else-if="detailStatus === 'error'" class="error micro">{{ detailError }}</p>
-          <TrajectoryView v-else-if="trajectory !== null" :trajectory="trajectory" />
+          <p v-else-if="detailStatus === 'error'" class="page-note error micro">{{ detailError }}</p>
+          <TrajectoryView v-else-if="trajectory !== null" :records="trajectory.records" />
         </template>
       </main>
     </div>
