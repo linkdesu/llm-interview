@@ -42,33 +42,43 @@ async function spaDocument(): Promise<Response> {
   }
 }
 
-// Matches the transcript route /session/<question>/<model>/<datetime>/
-// session.jsonl with exactly one path segment per archive level.
-const SESSION_FILE_PATTERN =
-  /^\/session\/([^/]+)\/([^/]+)\/([^/]+)\/session\.jsonl$/
+// Files the server will serve out of an archived run directory: the transcript
+// (session.jsonl) plus the three Artifact files (index.html + style.css +
+// script.js). run.json is deliberately not exposed.
+const RUN_FILE_NAMES = new Set(['session.jsonl', 'index.html', 'style.css', 'script.js'])
+
+// Matches /session/<question>/<model>/<datetime>/<file> with exactly one path
+// segment per archive level and a single filename.
+const RUN_FILE_PATTERN = /^\/session\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)$/
 
 /**
- * Serve a single archived transcript for GET /session/<question>/<model>/
- * <datetime>/session.jsonl, or null when the URL does not name one. The path
- * is percent-decoded before matching and normalized with the same traversal
- * guard used for static files (see resolveStaticPath in lib/spa.ts), so
- * encoded or double-encoded '..' can never escape the archive root.
+ * Serve one file from an archived run directory for GET /session/<question>/
+ * <model>/<datetime>/<file>, or null when the URL does not name one of the
+ * allowed files. The path is percent-decoded before matching and normalized
+ * with the same traversal guard used for static files (see resolveStaticPath
+ * in lib/spa.ts), so encoded or double-encoded '..' can never escape the
+ * archive root.
  */
-async function serveSessionFile(urlPath: string): Promise<Response | null> {
+async function serveRunFile(urlPath: string): Promise<Response | null> {
   let decoded: string
   try {
     decoded = decodeURIComponent(urlPath)
   } catch {
     return null // malformed percent-encoding
   }
-  if (!SESSION_FILE_PATTERN.test(decoded)) return null
+  const match = RUN_FILE_PATTERN.exec(decoded)
+  if (match === null) return null
+  const fileName = match[4]
+  if (!RUN_FILE_NAMES.has(fileName)) return null
   const filePath = resolveStaticPath(SESSION_ROOT, decoded.slice('/session/'.length))
   if (!filePath) return null
   const file = Bun.file(filePath)
   if (!(await file.exists())) return null
-  return new Response(file, {
-    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
-  })
+  const contentType =
+    fileName === 'session.jsonl'
+      ? 'application/x-ndjson; charset=utf-8'
+      : contentTypeFor(filePath)
+  return new Response(file, { headers: { 'Content-Type': contentType } })
 }
 
 /**
@@ -102,10 +112,11 @@ Bun.serve({
       if (url.pathname === '/sessions') {
         return sessionsResponse()
       }
-      // Anything under /session/ is archive data: serve the transcript or 404.
+      // Anything under /session/ is archive data: serve the transcript or an
+      // Artifact file, or 404.
       if (url.pathname.startsWith('/session/')) {
         return (
-          (await serveSessionFile(url.pathname)) ??
+          (await serveRunFile(url.pathname)) ??
           new Response('Not Found', { status: 404 })
         )
       }

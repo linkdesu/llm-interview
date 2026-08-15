@@ -17,6 +17,9 @@ export interface SessionRun {
   /** Path of the transcript relative to the archive root, or null when the
    *  run directory has no session.jsonl (pre-JSONL archive format). */
   sessionJsonl: string | null
+  /** Path of the Artifact's index.html relative to the archive root, or null
+   *  when the run directory has no index.html. */
+  artifactHtml: string | null
 }
 
 /** A model under a question, with its run datetimes sorted. */
@@ -67,12 +70,16 @@ export function listSessionRuns(root: string): SessionRun[] {
         const runDir = path.join(modelDir, datetime)
         if (!isVisibleDirectory(modelDir, datetime)) continue
         const relativeJsonl = path.join(question, model, datetime, 'session.jsonl')
+        const relativeHtml = path.join(question, model, datetime, 'index.html')
         runs.push({
           question,
           model,
           datetime,
           sessionJsonl: existsSync(path.join(runDir, 'session.jsonl'))
             ? relativeJsonl
+            : null,
+          artifactHtml: existsSync(path.join(runDir, 'index.html'))
+            ? relativeHtml
             : null,
         })
       }

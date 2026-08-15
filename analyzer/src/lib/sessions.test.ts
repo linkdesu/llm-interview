@@ -30,9 +30,10 @@ function makeArchive(): { root: string; cleanup: () => void } {
       const runDir = path.join(root, combo, datetime)
       mkdirSync(runDir, { recursive: true })
       writeFileSync(path.join(runDir, 'session.jsonl'), '{"role":"user"}\n')
+      writeFileSync(path.join(runDir, 'index.html'), '<!DOCTYPE html>\n')
     }
   }
-  // A legacy run directory without a transcript.
+  // A legacy run directory without a transcript or an Artifact.
   mkdirSync(path.join(root, 'city-time-machine', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-050326'), {
     recursive: true,
   })
@@ -49,18 +50,22 @@ function jsonlFor(question: string, model: string, datetime: string): string {
   return path.join(question, model, datetime, 'session.jsonl')
 }
 
+function htmlFor(question: string, model: string, datetime: string): string {
+  return path.join(question, model, datetime, 'index.html')
+}
+
 describe('listSessionRuns', () => {
   it('lists every archived run, full history across all combos', () => {
     const { root, cleanup } = makeArchive()
     try {
       const runs = listSessionRuns(root)
       expect(runs).toEqual([
-        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-024239', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239') },
-        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-111111', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-111111') },
-        { question: 'browser-os', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-045601', sessionJsonl: jsonlFor('browser-os', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-045601') },
-        { question: 'city-time-machine', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-025707', sessionJsonl: jsonlFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707') },
-        { question: 'city-time-machine', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-050326', sessionJsonl: null },
-        { question: 'snake', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-032801', sessionJsonl: jsonlFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801') },
+        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-024239', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239'), artifactHtml: htmlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239') },
+        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-111111', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-111111'), artifactHtml: htmlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-111111') },
+        { question: 'browser-os', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-045601', sessionJsonl: jsonlFor('browser-os', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-045601'), artifactHtml: htmlFor('browser-os', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-045601') },
+        { question: 'city-time-machine', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-025707', sessionJsonl: jsonlFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707'), artifactHtml: htmlFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707') },
+        { question: 'city-time-machine', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-050326', sessionJsonl: null, artifactHtml: null },
+        { question: 'snake', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-032801', sessionJsonl: jsonlFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801'), artifactHtml: htmlFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801') },
       ])
     } finally {
       cleanup()
@@ -130,10 +135,10 @@ describe('groupByQuestion', () => {
 
   it('is a pure projection: input order does not affect the tree', () => {
     const runs: SessionRun[] = [
-      { question: 'zeta', model: 'alpha', datetime: '20260101-000002', sessionJsonl: null },
-      { question: 'alpha', model: 'beta', datetime: '20260101-000001', sessionJsonl: null },
-      { question: 'zeta', model: 'alpha', datetime: '20260101-000003', sessionJsonl: null },
-      { question: 'alpha', model: 'alpha', datetime: '20260101-000004', sessionJsonl: null },
+      { question: 'zeta', model: 'alpha', datetime: '20260101-000002', sessionJsonl: null, artifactHtml: null },
+      { question: 'alpha', model: 'beta', datetime: '20260101-000001', sessionJsonl: null, artifactHtml: null },
+      { question: 'zeta', model: 'alpha', datetime: '20260101-000003', sessionJsonl: null, artifactHtml: null },
+      { question: 'alpha', model: 'alpha', datetime: '20260101-000004', sessionJsonl: null, artifactHtml: null },
     ]
     const shuffled = [...runs].reverse()
     expect(groupByQuestion(runs)).toEqual(groupByQuestion(shuffled))
@@ -182,9 +187,9 @@ describe('groupByModel', () => {
 
   it('is a pure projection: input order does not affect the tree', () => {
     const runs: SessionRun[] = [
-      { question: 'q1', model: 'm2', datetime: '20260101-000001', sessionJsonl: null },
-      { question: 'q2', model: 'm1', datetime: '20260101-000002', sessionJsonl: null },
-      { question: 'q1', model: 'm1', datetime: '20260101-000003', sessionJsonl: null },
+      { question: 'q1', model: 'm2', datetime: '20260101-000001', sessionJsonl: null, artifactHtml: null },
+      { question: 'q2', model: 'm1', datetime: '20260101-000002', sessionJsonl: null, artifactHtml: null },
+      { question: 'q1', model: 'm1', datetime: '20260101-000003', sessionJsonl: null, artifactHtml: null },
     ]
     expect(groupByModel([...runs].reverse())).toEqual([
       {

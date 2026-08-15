@@ -314,14 +314,11 @@ body {
 }
 
 .leaf {
-  padding: 5px 8px 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   border-radius: 5px;
   color: var(--fg-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
   transition: background-color 120ms ease, color 120ms ease;
 }
 
@@ -336,7 +333,54 @@ body {
   box-shadow: inset 2px 0 0 var(--brand);
 }
 
-.leaf:focus-visible {
+/* The datetime is a real button so the row stays keyboard-accessible while the
+   view control sits beside it without sharing the selection click. */
+.leaf-select {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.leaf-view {
+  flex: none;
+  margin-right: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-caption);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.leaf-view:hover {
+  color: var(--accent);
+  border-color: var(--hairline-strong);
+  background: var(--hover);
+}
+
+.leaf-select:focus-visible,
+.leaf-view:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }

@@ -11,6 +11,7 @@ interface SessionRun {
   model: string
   datetime: string
   sessionJsonl: string | null
+  artifactHtml: string | null
 }
 
 interface ModelNode {
@@ -93,6 +94,18 @@ function isSelected(question: string, model: string, datetime: string): boolean 
     run.model === model &&
     run.datetime === datetime
   )
+}
+
+/** True when the run has an Artifact HTML file to open in a new tab. */
+function hasArtifact(question: string, model: string, datetime: string): boolean {
+  const run = runsByKey.value.get(runKey(question, model, datetime))
+  return run !== undefined && run.artifactHtml !== null
+}
+
+/** Open a run's Artifact HTML in a new tab (served by the Bun server). */
+function openArtifact(question: string, model: string, datetime: string) {
+  const encodedPath = [question, model, datetime].map(encodeURIComponent).join('/')
+  window.open('/session/' + encodedPath + '/index.html', '_blank', 'noopener,noreferrer')
 }
 
 /** Select a run from the sidebar: fetch its transcript and parse the trajectory. */
@@ -190,15 +203,26 @@ async function selectRun(question: string, model: string, datetime: string) {
                   <li
                     v-for="datetime in model.datetimes"
                     :key="datetime"
-                    class="leaf micro"
+                    class="leaf"
                     :class="{ active: isSelected(group.question, model.model, datetime) }"
-                    :title="datetime"
-                    role="button"
-                    tabindex="0"
-                    @click="selectRun(group.question, model.model, datetime)"
-                    @keydown.enter="selectRun(group.question, model.model, datetime)"
                   >
-                    {{ datetime }}
+                    <button
+                      type="button"
+                      class="leaf-select"
+                      :title="datetime"
+                      @click="selectRun(group.question, model.model, datetime)"
+                    >
+                      {{ datetime }}
+                    </button>
+                    <button
+                      v-if="hasArtifact(group.question, model.model, datetime)"
+                      type="button"
+                      class="leaf-view"
+                      :title="'Open Artifact HTML for ' + datetime"
+                      @click="openArtifact(group.question, model.model, datetime)"
+                    >
+                      view
+                    </button>
                   </li>
                 </ul>
               </section>
@@ -224,15 +248,26 @@ async function selectRun(question: string, model: string, datetime: string) {
                   <li
                     v-for="datetime in question.datetimes"
                     :key="datetime"
-                    class="leaf micro"
+                    class="leaf"
                     :class="{ active: isSelected(question.question, group.model, datetime) }"
-                    :title="datetime"
-                    role="button"
-                    tabindex="0"
-                    @click="selectRun(question.question, group.model, datetime)"
-                    @keydown.enter="selectRun(question.question, group.model, datetime)"
                   >
-                    {{ datetime }}
+                    <button
+                      type="button"
+                      class="leaf-select"
+                      :title="datetime"
+                      @click="selectRun(question.question, group.model, datetime)"
+                    >
+                      {{ datetime }}
+                    </button>
+                    <button
+                      v-if="hasArtifact(question.question, group.model, datetime)"
+                      type="button"
+                      class="leaf-view"
+                      :title="'Open Artifact HTML for ' + datetime"
+                      @click="openArtifact(question.question, group.model, datetime)"
+                    >
+                      view
+                    </button>
                   </li>
                 </ul>
               </section>
