@@ -1,9 +1,13 @@
+.pi
 .pi-home
+.multica
+.agent_context
 runner/node_modules
 .DS_Store
 pi-run-*.log
 session/*
 !session/.gitkeep
+runner/*.json
 
 # Site favicon must be tracked despite global *.ico ignores.
 !dashboard/public/favicon.ico
