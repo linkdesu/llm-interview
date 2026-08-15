@@ -6,9 +6,10 @@ See `CONTEXT.md` at the repo root for the domain model.
 
 ## Status
 
-T1 scaffold only: a Vue 3 + TypeScript + Vite SPA shell and a single Bun
-process serving the built SPA. Session listing, the JSON API, and the
-trajectory view arrive in later tickets.
+A Vue 3 + TypeScript + Vite SPA served by a single Bun process with the JSON
+API (session listing + verbatim transcripts). Selecting a run in the sidebar
+renders its trajectory: invocations with their root prompts, turns, and the
+tool-call / result ledger. Token usage and thinking render is a later ticket.
 
 ## Commands
 
