@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bun scripts/dev.ts",
     "build": "vue-tsc -b && vite build",
     "serve": "bun src/server.ts",
     "lint": "eslint .",

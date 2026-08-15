@@ -121,4 +121,22 @@ Bun.serve({
   },
 })
 
+// Report the archive state once at startup so a misconfigured SESSION_ROOT
+// (e.g. a worktree checkout where session/ is gitignored and therefore empty)
+// is obvious rather than silently showing "0 runs".
+let runCount = -1
+try {
+  runCount = listSessionRuns(SESSION_ROOT).length
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  console.warn(`[analyzer] cannot read session archive at ${SESSION_ROOT}: ${message}`)
+}
 console.log(`Analyzer listening on http://localhost:${PORT}`)
+console.log(
+  `[analyzer] session root: ${SESSION_ROOT} (${runCount === -1 ? 'unreadable' : runCount + ' runs'})`
+)
+if (runCount === 0) {
+  console.warn(
+    '[analyzer] session archive is empty — session/ is gitignored and only exists in the main checkout; set SESSION_ROOT to the real archive path.'
+  )
+}
