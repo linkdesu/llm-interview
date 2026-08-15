@@ -1,0 +1,21 @@
+# Analyzer
+
+Operator-facing companion to the [Dashboard](../dashboard/): lists every
+archived Session and renders a selected Session's transcript as a trajectory.
+See `CONTEXT.md` at the repo root for the domain model.
+
+## Status
+
+T1 scaffold only: a Vue 3 + TypeScript + Vite SPA shell and a single Bun
+process serving the built SPA. Session listing, the JSON API, and the
+trajectory view arrive in later tickets.
+
+## Commands
+
+- `bun install` — install dependencies
+- `bun run dev` — Vite dev server (HMR) for the frontend
+- `bun run build` — type-check (`vue-tsc -b`) and build to `dist/`
+- `bun run serve` — serve `dist/` with the Bun server (default port 3090,
+  override with `PORT`)
+- `bun run lint` — ESLint
+- `bun run test` — vitest

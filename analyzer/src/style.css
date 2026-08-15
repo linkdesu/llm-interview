@@ -1,0 +1,88 @@
+/* Design language: shares the editorial minimalism of the Dashboard — plain
+   paper background, hairline rules, mono uppercase micro-labels, a single
+   accent color. */
+
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --fg-secondary: #525252;
+  --fg-muted: #a3a3a3;
+  --hairline: #e5e7eb;
+  --accent: #2563eb;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--fg);
+  background: var(--bg);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+/* Shared micro label: mono, uppercase, letter-spaced — the journal chrome. */
+.micro {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* ── Topbar ─────────────────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 52px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.brand {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.brand-accent {
+  color: var(--accent);
+}
+
+.topbar .micro {
+  margin-left: auto;
+}
+
+/* ── Page ───────────────────────────────────────────────────────────────── */
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 96px 24px 64px;
+}
+
+.page-title {
+  margin: 0 0 16px;
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.page-lede {
+  max-width: 560px;
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--fg-secondary);
+}
