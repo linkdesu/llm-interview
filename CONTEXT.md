@@ -39,3 +39,7 @@ _Avoid_: index.json, mapping
 **Dashboard**:
 The statically published site (GitHub Pages) aggregating all Sessions, letting viewers compare Artifact quality and transcripts across Question / Model combos. Artifact-first; the process view is expandable. On mobile (viewport ≤ 768px) it degrades to a transcript-first experience: Artifact iframes render read-only and cannot be expanded (ADR 0008).
 _Avoid_: site, viewer
+
+**Analyzer**:
+The operator-facing site that lists every archived Session and renders a selected Session's transcript as a trajectory: turns (one model iteration each), tool call↔result pairs, token usage, and reasoning text. Complements the Dashboard — the Dashboard compares the latest Run per Combo, while the Analyzer exposes the full Session history for diagnosis.
+_Avoid_: inspector, trajectory viewer
