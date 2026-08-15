@@ -138,29 +138,34 @@ async function selectRun(question: string, model: string, datetime: string) {
     </header>
     <div class="layout">
       <aside class="sidebar">
-        <div class="sidebar-head">
-          <span class="micro">Sessions</span>
-          <span class="micro run-count">{{ runCount }} runs</span>
+        <div class="sidebar-top">
+          <div class="sidebar-head">
+            <span class="micro">Sessions</span>
+            <span class="micro run-count">{{ runCount }} runs</span>
+          </div>
+          <div class="toggle" role="group" aria-label="Session grouping">
+            <button
+              type="button"
+              :class="{ active: grouping === 'question-first' }"
+              @click="grouping = 'question-first'"
+            >
+              Question first
+            </button>
+            <button
+              type="button"
+              :class="{ active: grouping === 'model-first' }"
+              @click="grouping = 'model-first'"
+            >
+              Model first
+            </button>
+          </div>
+          <p v-if="error" class="sidebar-status error micro">{{ error }}</p>
+          <p v-else-if="!sessions" class="sidebar-status micro muted">Loading…</p>
+          <p v-else-if="sessions.flat.length === 0" class="sidebar-status micro muted">
+            No archived runs
+          </p>
         </div>
-        <div class="toggle" role="group" aria-label="Session grouping">
-          <button
-            type="button"
-            :class="{ active: grouping === 'question-first' }"
-            @click="grouping = 'question-first'"
-          >
-            Question first
-          </button>
-          <button
-            type="button"
-            :class="{ active: grouping === 'model-first' }"
-            @click="grouping = 'model-first'"
-          >
-            Model first
-          </button>
-        </div>
-        <p v-if="error" class="error micro">{{ error }}</p>
-        <p v-else-if="!sessions" class="micro muted">Loading…</p>
-        <nav v-else class="tree" aria-label="Archived sessions">
+        <nav v-if="sessions && sessions.flat.length > 0" class="tree" aria-label="Archived sessions">
           <!-- Question first: question → model → datetime -->
           <template v-if="grouping === 'question-first'">
             <section
@@ -168,19 +173,26 @@ async function selectRun(question: string, model: string, datetime: string) {
               :key="'q:' + group.question"
               class="branch"
             >
-              <h2 class="level question">{{ group.question }}</h2>
+              <h2 class="level question" :title="group.question">
+                <span class="level-label">{{ group.question }}</span>
+                <span class="level-count">{{ group.models.length }}</span>
+              </h2>
               <section
                 v-for="model in group.models"
                 :key="'m:' + group.question + '/' + model.model"
                 class="branch"
               >
-                <h3 class="level model">{{ model.model }}</h3>
+                <h3 class="level model" :title="model.model">
+                  <span class="level-label">{{ model.model }}</span>
+                  <span class="level-count">{{ model.datetimes.length }}</span>
+                </h3>
                 <ul class="leaves">
                   <li
                     v-for="datetime in model.datetimes"
                     :key="datetime"
                     class="leaf micro"
                     :class="{ active: isSelected(group.question, model.model, datetime) }"
+                    :title="datetime"
                     role="button"
                     tabindex="0"
                     @click="selectRun(group.question, model.model, datetime)"
@@ -195,19 +207,26 @@ async function selectRun(question: string, model: string, datetime: string) {
           <!-- Model first: model → question → datetime -->
           <template v-else>
             <section v-for="group in sessions.modelFirst" :key="'m:' + group.model" class="branch">
-              <h2 class="level model">{{ group.model }}</h2>
+              <h2 class="level model" :title="group.model">
+                <span class="level-label">{{ group.model }}</span>
+                <span class="level-count">{{ group.questions.length }}</span>
+              </h2>
               <section
                 v-for="question in group.questions"
                 :key="'q:' + group.model + '/' + question.question"
                 class="branch"
               >
-                <h3 class="level question">{{ question.question }}</h3>
+                <h3 class="level question" :title="question.question">
+                  <span class="level-label">{{ question.question }}</span>
+                  <span class="level-count">{{ question.datetimes.length }}</span>
+                </h3>
                 <ul class="leaves">
                   <li
                     v-for="datetime in question.datetimes"
                     :key="datetime"
                     class="leaf micro"
                     :class="{ active: isSelected(question.question, group.model, datetime) }"
+                    :title="datetime"
                     role="button"
                     tabindex="0"
                     @click="selectRun(question.question, group.model, datetime)"

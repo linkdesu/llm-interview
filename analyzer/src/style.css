@@ -170,59 +170,89 @@ body {
 
 .sidebar {
   flex: 0 0 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid var(--hairline-strong);
   background: var(--bg-header);
-  overflow-y: auto;
-  padding: 20px 16px 32px;
+  overflow: hidden;
+}
+
+/* Pinned chrome: head + grouping toggle + status stay put while the tree
+   scrolls beneath them. */
+.sidebar-top {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 16px 0;
+  border-bottom: 1px solid var(--hairline);
 }
 
 .sidebar-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 12px;
 }
 
 .run-count {
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--bg-layer-1);
   color: var(--fg-muted);
+}
+
+.sidebar-status {
+  margin: 0;
 }
 
 .toggle {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   padding: 3px;
-  margin-bottom: 16px;
   border: 1px solid var(--hairline-strong);
-  border-radius: 6px;
+  border-radius: 7px;
+  background: var(--bg-layer-1);
 }
 
 .toggle button {
   flex: 1;
   padding: 5px 8px;
-  font: inherit;
-  font-size: 12px;
-  border: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .toggle button:hover {
-  color: var(--fg);
+  background: var(--hover);
+  color: var(--fg-secondary);
 }
 
 .toggle button.active {
-  background: var(--fg);
-  color: var(--bg);
+  background: var(--bg-layer-3);
+  border-color: var(--hairline-strong);
+  color: var(--fg);
 }
 
 /* ── Session tree ──────────────────────────────────────────────────────── */
 
 .tree {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
+  padding: 16px 16px 24px;
 }
 
 .branch {
@@ -232,13 +262,21 @@ body {
 }
 
 .branch .branch {
-  margin-left: 12px;
-  padding-left: 12px;
+  margin-left: 10px;
+  padding-left: 10px;
   border-left: 1px solid var(--hairline);
 }
 
 .level {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   margin: 0;
+}
+
+.level-label {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
@@ -246,12 +284,24 @@ body {
   text-transform: uppercase;
   line-height: 1.4;
   color: var(--fg);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.branch .branch .level {
+.branch .branch .level-label {
   color: var(--fg-secondary);
   font-weight: 500;
+}
+
+.level-count {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-caption);
 }
 
 .leaves {
@@ -264,23 +314,31 @@ body {
 }
 
 .leaf {
+  padding: 5px 8px 5px 10px;
+  border-radius: 5px;
   color: var(--fg-secondary);
   cursor: pointer;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .leaf:hover {
-  color: var(--accent);
+  background: var(--hover);
+  color: var(--fg);
 }
 
 .leaf.active {
+  background: var(--selected);
   color: var(--accent);
-  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--brand);
 }
 
 .leaf:focus-visible {
   outline: 1px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -1px;
 }
 
 .error {
