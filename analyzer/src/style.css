@@ -4,6 +4,7 @@
 
 :root {
   --bg: #ffffff;
+  --bg-subtle: #fafaf9;
   --fg: #0a0a0a;
   --fg-secondary: #525252;
   --fg-muted: #a3a3a3;
@@ -274,7 +275,68 @@ body {
 }
 
 .turn-meta {
-  /* Reserved slot for ticket #27: token usage and thinking render here. */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--hairline);
+}
+
+.usage-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0;
+}
+
+.usage-field {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.usage-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.usage-value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-secondary);
+}
+
+.usage-value.total {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.thinking-toggle {
+  color: var(--fg-secondary);
+  cursor: pointer;
+}
+
+.thinking-toggle:hover {
+  color: var(--accent);
+}
+
+.thinking-text {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg-secondary);
 }
 
 .assistant-text {
@@ -301,7 +363,7 @@ body {
   padding: 10px 12px;
   border: 1px solid var(--hairline);
   border-radius: 6px;
-  background: #fafafa;
+  background: var(--bg-subtle);
 }
 
 .tool-entry.error {
