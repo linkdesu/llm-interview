@@ -52,3 +52,14 @@ Sub-agent context telemetry for the llm-interview repo, recorded per wave per th
 - HomeView 初版浏览器冒烟发现 2 个真 bug（oklch 读回不归一化导致 hexToRgb 回退黑色；R3F Canvas in-flow 定位把 overlay 挤下屏）——hub 消息断点续修一轮通过。**冒烟门禁再次证明价值：agent 自验全绿 ≠ 视觉正确**。
 - 教训订正：编排者给的「canvas fillStyle 归一化」hint 在当前 Chromium 不成立（原样返回 oklch 字符串）——agent 自行加了 `#rrggbb` 校验 + 每主题兜底 hex。写进 prompt 的"捷径"也要被 agent 防御性验证。
 - 中途事故：用户重置模型配置杀掉首跑 AppShellHome（51,826 峰值，尚未写文件，无残留）。
+
+## 2026-08-22 Wave 5 — #35 Question grid（task agent = qwen-27b-latest thinking）
+
+| task | 模型 | 任务范围 | 结果 | 失败模式 | context 峰值 | compaction | 耗时 |
+|---|---|---|---|---|---|---|---|
+| QuestionGrid | new-api-think/qwen-27b-latest | #35：timeline+card+grid，3 文件 + 1 项 React Bits 选型 | 成功（3/3，Change 4 按编排者指令放弃） | 前轮中 **探索失控前兆**：112k 峰值、36 调用 0 写入 | 115,478 | 0 | 12m55s |
+
+### 备注
+- 失控点不是读代码而是**逛 React Bits 文档站 + 反复重试 registry add**（animated-list 400 / depth-card 404）——外部文档页单页 40KB+，是最贵的探索材料。5 分钟监控在 36 调用 0 写入时介入 steering，agent 立即回归写作并 13 分钟内完成。
+- 校准新增：① 派发时若要用 registry 组件，**编排者预验证组件名可用性**并把确切 item 名写进 prompt（如 `@reactbits-starter/blinking-squares-tw`），禁止 agent 自行浏览选型；② 监控规则「10 分钟无写入即介入」有效。
+- Registry 事实：`@reactbits-pro` 命名空间服务 blocks/templates（pricing-1 等），单组件多在 `@reactbits-starter` 且带 `-tw`/`-css` 后缀；pro 站的组件目录 ≠ starter registry 内容。
