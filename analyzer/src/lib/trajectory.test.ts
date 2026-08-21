@@ -49,6 +49,7 @@ interface AssistantOpts {
   content: unknown[]
   usage?: Record<string, unknown>
   stopReason?: string
+  errorMessage?: string
   model?: string
   timestamp?: number
 }
@@ -63,6 +64,7 @@ function assistantMessage(opts: AssistantOpts): string {
   }
   if (opts.usage !== undefined) message.usage = opts.usage
   if (opts.stopReason !== undefined) message.stopReason = opts.stopReason
+  if (opts.errorMessage !== undefined) message.errorMessage = opts.errorMessage
   if (opts.model !== undefined) message.model = opts.model
   if (opts.timestamp !== undefined) message.timestamp = opts.timestamp
   return JSON.stringify({
@@ -255,6 +257,53 @@ describe('parseTrajectory', () => {
     expect(child.kind).toBe('tool-call')
     expect(child.summary).toBe('read {"path":"./spec.md"}')
     expect(child.sections[0].json).toEqual({ path: './spec.md' })
+  })
+
+  it('marks failed upstream calls as api-error with the error message', () => {
+    const errorMessage =
+      '500: {"message":"upstream error: do request failed","type":"new_api_error","code":"do_request_failed"}'
+    const jsonl = [
+      header('t1'),
+      userMessage('u1', 'h1', 'Run'),
+      assistantMessage({
+        id: 'a1',
+        parentId: 'u1',
+        content: [],
+        stopReason: 'error',
+        errorMessage,
+        timestamp: 1785272607633,
+      }),
+    ].join('\n')
+
+    const failed: TrajectoryRecord = parseTrajectory(jsonl).records[2]
+    expect(failed.kind).toBe('api-error')
+    expect(failed.summary).toContain('upstream error: do request failed')
+    expect(failed.meta).toContainEqual({ label: 'stopReason', value: 'error' })
+    expect(failed.sections.map((section) => section.label)).toEqual(['Error'])
+    expect(failed.sections[0].text).toBe(errorMessage)
+
+    // An assistant turn with an error stopReason but no errorMessage still
+    // degrades to api-error rather than a silent "(no text)".
+    const bare = [
+      header('t2'),
+      userMessage('u2', 'h2', 'Run'),
+      assistantMessage({ id: 'a2', parentId: 'u2', content: [], stopReason: 'error' }),
+    ].join('\n')
+    const bareFailed: TrajectoryRecord = parseTrajectory(bare).records[2]
+    expect(bareFailed.kind).toBe('api-error')
+    expect(bareFailed.summary).toBe('API error')
+
+    // Retries that eventually succeed leave a visible api-error trail, and a
+    // normal stopReason never misclassifies a real assistant turn.
+    const ok: TrajectoryRecord = parseTrajectory(
+      [
+        header('t3'),
+        userMessage('u3', 'h3', 'Run'),
+        assistantMessage({ id: 'a3', parentId: 'u3', content: [textBlock('Done.')], stopReason: 'end_turn' }),
+      ].join('\n')
+    ).records[2]
+    expect(ok.kind).toBe('assistant')
+    expect(ok.summary).toBe('Done.')
   })
 
   it('surfaces tool-result error and image flags in meta', () => {

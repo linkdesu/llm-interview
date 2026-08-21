@@ -27,6 +27,7 @@ export type RecordKind =
   | 'thinking'
   | 'user'
   | 'assistant'
+  | 'api-error'
   | 'tool-call'
   | 'tool-result'
   | 'compaction'
@@ -102,6 +103,7 @@ export const KIND_LABELS: Record<RecordKind, string> = {
   thinking: 'THINKING',
   user: 'USER',
   assistant: 'ASSISTANT',
+  'api-error': 'API ERROR',
   'tool-call': 'TOOL CALL',
   'tool-result': 'TOOL RESULT',
   compaction: 'COMPACTION',
@@ -115,6 +117,7 @@ export const KIND_LABELS: Record<RecordKind, string> = {
 export function laneForKind(kind: RecordKind): TimelineLane {
   switch (kind) {
     case 'assistant':
+    case 'api-error':
     case 'compaction':
       return 1
     case 'tool-call':
@@ -522,6 +525,12 @@ function foldRecord(
       const text = textOfContent(message.content)
       const thinking = thinkingOfContent(message.content)
       const calls = toolCallsOfContent(message.content)
+      const errorMessage = stringOf(message.errorMessage) ?? ''
+      // A failed upstream call surfaces as an assistant message with a
+      // stopReason of "error" and a non-empty errorMessage. Mark those as
+      // api-error so the ledger shows the failure instead of "(no text)".
+      const isApiError = errorMessage !== '' || stringOf(message.stopReason) === 'error'
+      const recordKind: RecordKind = isApiError ? 'api-error' : 'assistant'
 
       const meta: RecordMeta[] = [
         { label: 'role', value: role },
@@ -535,16 +544,24 @@ function foldRecord(
       ]
 
       const sections: RecordSection[] = []
+      if (errorMessage !== '') sections.push({ label: 'Error', text: errorMessage, json: null })
       if (text !== '') sections.push({ label: 'Text', text, json: null })
       if (thinking !== '') sections.push({ label: 'Thinking', text: thinking, json: null })
 
       const records: TrajectoryRecord[] = [
         {
           ...base,
-          kind,
+          kind: recordKind,
           role,
           timestampMs: ts,
-          summary: text !== '' ? preview(text) : '(no text)',
+          summary:
+            errorMessage !== ''
+              ? preview(errorMessage)
+              : text !== ''
+                ? preview(text)
+                : isApiError
+                  ? 'API error'
+                  : '(no text)',
           meta,
           sections,
           usage: usageOf(asRecord(message.usage)),

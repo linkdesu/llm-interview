@@ -112,6 +112,11 @@ body {
   background: #2e2a45;
 }
 
+.kind-tag[data-kind='api-error'] {
+  color: #fca5a5;
+  background: #45181f;
+}
+
 .kind-tag[data-kind='tool-call'] {
   color: #fdba74;
   background: #332312;
@@ -629,6 +634,10 @@ body {
   background: #c4b5fd;
 }
 
+.timeline-span[data-kind='api-error'] {
+  background: #f87171;
+}
+
 .timeline-span[data-kind='tool-call'] {
   background: #fdba74;
 }
@@ -759,6 +768,16 @@ body {
 .ledger tbody tr[data-kind='session'] .col-summary {
   color: var(--fg);
   font-weight: 600;
+}
+
+/* Failed upstream calls surface as red-tinted rows so a broken tail is
+   visible in the ledger instead of reading as a normal assistant turn. */
+.ledger tbody tr[data-kind='api-error'] {
+  background: var(--danger-bg, #45181f1a);
+}
+
+.ledger tbody tr[data-kind='api-error'] .col-summary {
+  color: var(--error);
 }
 
 /* Nested tool-call children indent under their assistant parent. */
