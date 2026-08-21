@@ -1,0 +1,11 @@
+{
+  "name": "llm-interview",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "runner",
+    "dashboard-legacy",
+    "analyzer",
+    "dashboard"
+  ]
+}
