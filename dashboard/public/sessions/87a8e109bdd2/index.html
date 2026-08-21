@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser OS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Desktop area: holds icons and windows -->
+  <div id="desktop">
+    <!-- App icons are rendered here by script.js -->
+    <div id="icons" class="icons"></div>
+    <!-- Windows are rendered here by script.js -->
+    <div id="windows" class="windows"></div>
+  </div>
+
+  <!-- Desktop context menu (right-click on empty desktop) -->
+  <div id="desktop-menu" class="context-menu hidden">
+    <div class="menu-item" data-action="open-notepad">Notepad</div>
+    <div class="menu-item" data-action="open-calculator">Calculator</div>
+    <div class="menu-item" data-action="open-minesweeper">Minesweeper</div>
+    <div class="menu-item" data-action="open-spider">Spider Solitaire</div>
+  </div>
+
+  <!-- Taskbar fixed to the bottom of the screen -->
+  <div id="taskbar">
+    <div id="taskbar-apps" class="taskbar-apps"></div>
+    <div id="clock" class="clock">00:00</div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

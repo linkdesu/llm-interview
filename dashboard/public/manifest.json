@@ -1,0 +1,846 @@
+{
+  "generatedAt": "2026-08-21T18:19:19.259Z",
+  "combos": [
+    {
+      "comboId": "edd4ba46e046",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Ornith-1.0-35B",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.0-35b"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-16T03:26:14.142Z",
+      "endedAt": "2026-08-16T07:09:16.407Z",
+      "durationMs": 13382235,
+      "status": "ok",
+      "contractViolations": [
+        "unexpected file: out.log"
+      ],
+      "files": {
+        "artifact": "sessions/edd4ba46e046/index.html",
+        "style": "sessions/edd4ba46e046/style.css",
+        "script": "sessions/edd4ba46e046/script.js",
+        "transcript": "sessions/edd4ba46e046/session.jsonl",
+        "run": "sessions/edd4ba46e046/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "87a8e109bdd2",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.5-35b"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-21T17:41:16.400Z",
+      "endedAt": "2026-08-21T18:03:28.910Z",
+      "durationMs": 1332502,
+      "status": "error",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/87a8e109bdd2/index.html",
+        "style": "sessions/87a8e109bdd2/style.css",
+        "script": "sessions/87a8e109bdd2/script.js",
+        "transcript": "sessions/87a8e109bdd2/session.jsonl",
+        "run": "sessions/87a8e109bdd2/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "7acb0fcc1c92",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwen3.6-35B-A3B-UD-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwen3.6-35b-a3b-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-27T08:10:26.807Z",
+      "endedAt": "2026-07-27T09:02:28.940Z",
+      "durationMs": 3122020,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/7acb0fcc1c92/index.html",
+        "style": "sessions/7acb0fcc1c92/style.css",
+        "script": "sessions/7acb0fcc1c92/script.js",
+        "transcript": "sessions/7acb0fcc1c92/session.jsonl",
+        "run": "sessions/7acb0fcc1c92/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "4861e35124ab",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwen3.8-27B",
+        "provider": "idealsoft",
+        "modelId": "gamepc/qwen3.8-27b"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-16T11:09:44.521Z",
+      "endedAt": "2026-08-16T11:43:00.846Z",
+      "durationMs": 1996307,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/4861e35124ab/index.html",
+        "style": "sessions/4861e35124ab/style.css",
+        "script": "sessions/4861e35124ab/script.js",
+        "transcript": "sessions/4861e35124ab/session.jsonl",
+        "run": "sessions/4861e35124ab/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "8bb728fd1a38",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwen3.8-27B-Q4_K_XL",
+        "provider": "idealsoft",
+        "modelId": "gamepc/qwen3.8-27b"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 0,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-16T15:03:03.578Z",
+      "endedAt": "2026-08-16T15:59:58.534Z",
+      "durationMs": 3414916,
+      "status": "error",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/8bb728fd1a38/index.html",
+        "style": "sessions/8bb728fd1a38/style.css",
+        "script": "sessions/8bb728fd1a38/script.js",
+        "transcript": "sessions/8bb728fd1a38/session.jsonl",
+        "run": "sessions/8bb728fd1a38/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "763e9741afe4",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwopus3.6-35B-A3B-Coder-Q5_K_M",
+        "provider": "idealsoft",
+        "modelId": "ai-02/qwopus3.6-35b-a3b-coder-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-08T08:07:27.212Z",
+      "endedAt": "2026-08-08T08:19:38.692Z",
+      "durationMs": 730617,
+      "status": "error",
+      "contractViolations": [
+        "unexpected file: screenshot1.png",
+        "unexpected file: screenshot2.png"
+      ],
+      "files": {
+        "artifact": "sessions/763e9741afe4/index.html",
+        "style": "sessions/763e9741afe4/style.css",
+        "script": "sessions/763e9741afe4/script.js",
+        "transcript": "sessions/763e9741afe4/session.jsonl",
+        "run": "sessions/763e9741afe4/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "a4b42f0fe531",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwopus3.6-35b-a3b-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-26T17:15:10.243Z",
+      "endedAt": "2026-07-26T18:26:23.829Z",
+      "durationMs": 4273557,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/a4b42f0fe531/index.html",
+        "style": "sessions/a4b42f0fe531/style.css",
+        "script": "sessions/a4b42f0fe531/script.js",
+        "transcript": "sessions/a4b42f0fe531/session.jsonl",
+        "run": "sessions/a4b42f0fe531/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "54edf3724b47",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Ornith-1.0-35B",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.0-35b"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-16T03:26:14.143Z",
+      "endedAt": "2026-08-16T03:54:41.237Z",
+      "durationMs": 1707086,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/54edf3724b47/index.html",
+        "style": "sessions/54edf3724b47/style.css",
+        "script": "sessions/54edf3724b47/script.js",
+        "transcript": "sessions/54edf3724b47/session.jsonl",
+        "run": "sessions/54edf3724b47/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "fcc3cc4840f7",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.5-35b"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-21T12:08:08.850Z",
+      "endedAt": "2026-08-21T12:43:09.613Z",
+      "durationMs": 2100704,
+      "status": "error",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/fcc3cc4840f7/index.html",
+        "style": "sessions/fcc3cc4840f7/style.css",
+        "script": "sessions/fcc3cc4840f7/script.js",
+        "transcript": "sessions/fcc3cc4840f7/session.jsonl",
+        "run": "sessions/fcc3cc4840f7/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "2795bb809d1e",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Qwen3.6-27B-Fable-Fusion-711-MTP-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwen3.6-27b-fable-fusion-q5"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-26T10:39:57.963Z",
+      "endedAt": "2026-07-26T11:14:50.289Z",
+      "durationMs": 2092311,
+      "status": "error",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/2795bb809d1e/index.html",
+        "style": "sessions/2795bb809d1e/style.css",
+        "script": "sessions/2795bb809d1e/script.js",
+        "transcript": "sessions/2795bb809d1e/session.jsonl",
+        "run": "sessions/2795bb809d1e/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "6d05b1d7a4fb",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Qwen3.6-35B-A3B-UD-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwen3.6-35b-a3b-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-27T09:02:28.951Z",
+      "endedAt": "2026-07-27T09:31:45.815Z",
+      "durationMs": 1756847,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/6d05b1d7a4fb/index.html",
+        "style": "sessions/6d05b1d7a4fb/style.css",
+        "script": "sessions/6d05b1d7a4fb/script.js",
+        "transcript": "sessions/6d05b1d7a4fb/session.jsonl",
+        "run": "sessions/6d05b1d7a4fb/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "d5c70478e09a",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Qwen3.8-27B",
+        "provider": "idealsoft",
+        "modelId": "gamepc/qwen3.8-27b"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-16T11:43:00.849Z",
+      "endedAt": "2026-08-16T11:48:10.566Z",
+      "durationMs": 309715,
+      "status": "ok",
+      "contractViolations": [
+        "missing expected artifact: index.html",
+        "missing expected artifact: style.css",
+        "missing expected artifact: script.js"
+      ],
+      "files": {
+        "transcript": "sessions/d5c70478e09a/session.jsonl",
+        "run": "sessions/d5c70478e09a/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "79ea19e4e006",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Qwen3.8-27B-Q4_K_XL",
+        "provider": "idealsoft",
+        "modelId": "gamepc/qwen3.8-27b"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 0,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-16T15:59:58.539Z",
+      "endedAt": "2026-08-16T16:49:12.232Z",
+      "durationMs": 2953679,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/79ea19e4e006/index.html",
+        "style": "sessions/79ea19e4e006/style.css",
+        "script": "sessions/79ea19e4e006/script.js",
+        "transcript": "sessions/79ea19e4e006/session.jsonl",
+        "run": "sessions/79ea19e4e006/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "b263edb34927",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Qwopus3.6-35B-A3B-Coder-Q5_K_M",
+        "provider": "idealsoft",
+        "modelId": "ai-02/qwopus3.6-35b-a3b-coder-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-08T08:19:38.728Z",
+      "endedAt": "2026-08-08T08:31:46.621Z",
+      "durationMs": 727874,
+      "status": "error",
+      "contractViolations": [
+        "unexpected file: out.log"
+      ],
+      "files": {
+        "artifact": "sessions/b263edb34927/index.html",
+        "style": "sessions/b263edb34927/style.css",
+        "script": "sessions/b263edb34927/script.js",
+        "transcript": "sessions/b263edb34927/session.jsonl",
+        "run": "sessions/b263edb34927/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "42b497c95b04",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwopus3.6-35b-a3b-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-27T06:54:56.558Z",
+      "endedAt": "2026-07-27T07:07:47.594Z",
+      "durationMs": 771016,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/42b497c95b04/index.html",
+        "style": "sessions/42b497c95b04/style.css",
+        "script": "sessions/42b497c95b04/script.js",
+        "transcript": "sessions/42b497c95b04/session.jsonl",
+        "run": "sessions/42b497c95b04/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "edb63fd5eca3",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Ornith-1.0-35B",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.0-35b"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-15T18:02:34.444Z",
+      "endedAt": "2026-08-15T18:46:56.539Z",
+      "durationMs": 2662080,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/edb63fd5eca3/index.html",
+        "style": "sessions/edb63fd5eca3/style.css",
+        "script": "sessions/edb63fd5eca3/script.js",
+        "transcript": "sessions/edb63fd5eca3/session.jsonl",
+        "run": "sessions/edb63fd5eca3/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "1d934d169f5b",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.5-35b"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-21T14:30:53.868Z",
+      "endedAt": "2026-08-21T15:44:55.245Z",
+      "durationMs": 4441360,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/1d934d169f5b/index.html",
+        "style": "sessions/1d934d169f5b/style.css",
+        "script": "sessions/1d934d169f5b/script.js",
+        "transcript": "sessions/1d934d169f5b/session.jsonl",
+        "run": "sessions/1d934d169f5b/run.json"
+      },
+      "maxTurnsExceeded": true,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "c8bafdfb2bbf",
+      "question": {
+        "name": "snake",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Qwen3.6-27B-Fable-Fusion-711-MTP-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwen3.6-27b-fable-fusion-q5"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-26T04:42:20.334Z",
+      "endedAt": "2026-07-26T05:02:12.333Z",
+      "durationMs": 1191991,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/c8bafdfb2bbf/index.html",
+        "style": "sessions/c8bafdfb2bbf/style.css",
+        "script": "sessions/c8bafdfb2bbf/script.js",
+        "transcript": "sessions/c8bafdfb2bbf/session.jsonl",
+        "run": "sessions/c8bafdfb2bbf/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "6912d70fd74f",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwen3.6-35B-A3B-UD-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwen3.6-35b-a3b-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-27T09:31:45.818Z",
+      "endedAt": "2026-07-27T09:55:04.930Z",
+      "durationMs": 1399102,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/6912d70fd74f/index.html",
+        "style": "sessions/6912d70fd74f/style.css",
+        "script": "sessions/6912d70fd74f/script.js",
+        "transcript": "sessions/6912d70fd74f/session.jsonl",
+        "run": "sessions/6912d70fd74f/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "4e78a712f6db",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwen3.8-27B",
+        "provider": "idealsoft",
+        "modelId": "gamepc/qwen3.8-27b"
+      },
+      "params": {
+        "thinking": "on",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-16T11:48:10.569Z",
+      "endedAt": "2026-08-16T12:04:02.512Z",
+      "durationMs": 951937,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/4e78a712f6db/index.html",
+        "style": "sessions/4e78a712f6db/style.css",
+        "script": "sessions/4e78a712f6db/script.js",
+        "transcript": "sessions/4e78a712f6db/session.jsonl",
+        "run": "sessions/4e78a712f6db/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "c98826a2373d",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwen3.8-27B-Q4_K_XL",
+        "provider": "idealsoft",
+        "modelId": "gamepc/qwen3.8-27b"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 0,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-16T16:49:12.237Z",
+      "endedAt": "2026-08-16T17:23:47.106Z",
+      "durationMs": 2074852,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/c98826a2373d/index.html",
+        "style": "sessions/c98826a2373d/style.css",
+        "script": "sessions/c98826a2373d/script.js",
+        "transcript": "sessions/c98826a2373d/session.jsonl",
+        "run": "sessions/c98826a2373d/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 100
+    },
+    {
+      "comboId": "1e68e317d31a",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwopus3.6-35B-A3B-Coder-Q5_K_M",
+        "provider": "idealsoft",
+        "modelId": "ai-02/qwopus3.6-35b-a3b-coder-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-08-08T08:39:08.909Z",
+      "endedAt": "2026-08-08T08:42:19.223Z",
+      "durationMs": 190308,
+      "status": "error",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/1e68e317d31a/index.html",
+        "style": "sessions/1e68e317d31a/style.css",
+        "script": "sessions/1e68e317d31a/script.js",
+        "transcript": "sessions/1e68e317d31a/session.jsonl",
+        "run": "sessions/1e68e317d31a/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 200
+    },
+    {
+      "comboId": "e1cd5a5fed98",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M",
+        "provider": "llamacpp-local",
+        "modelId": "qwopus3.6-35b-a3b-q5"
+      },
+      "params": {
+        "thinking": "off",
+        "temp": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1,
+        "spec_type": "draft-mtp",
+        "spec_draft_n_max": 2
+      },
+      "piVersion": "0.81.1",
+      "startedAt": "2026-07-27T07:44:28.869Z",
+      "endedAt": "2026-07-27T08:08:01.573Z",
+      "durationMs": 1412694,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/e1cd5a5fed98/index.html",
+        "style": "sessions/e1cd5a5fed98/style.css",
+        "script": "sessions/e1cd5a5fed98/script.js",
+        "transcript": "sessions/e1cd5a5fed98/session.jsonl",
+        "run": "sessions/e1cd5a5fed98/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 200
+    }
+  ]
+}

@@ -1,0 +1,216 @@
+/* Snake Game — Neon Visual Polish (Ticket 3) */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  color: #eee;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#game-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#score-display {
+  font-size: 22px;
+  margin-bottom: 10px;
+  color: #0f0;
+  text-shadow: 0 0 10px #0f0, 0 0 20px #0f0;
+  letter-spacing: 2px;
+  font-weight: bold;
+}
+
+#game-canvas {
+  border: 2px solid #0ff;
+  box-shadow: 0 0 15px #0ff, inset 0 0 15px rgba(0, 255, 255, 0.08);
+  background: #000;
+  display: block;
+  border-radius: 4px;
+}
+
+/* ─── Overlays (shared base) ──────────────────────────────────── */
+
+#start-menu,
+#ready-overlay,
+#game-over {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 10;
+  pointer-events: auto;
+}
+
+/* ─── Start Menu ──────────────────────────────────────────────── */
+
+#title {
+  font-size: 56px;
+  color: #0ff;
+  margin-bottom: 28px;
+  text-shadow:
+    0 0 10px #0ff,
+    0 0 30px #0ff,
+    0 0 60px rgba(0, 255, 255, 0.4);
+  letter-spacing: 12px;
+  font-weight: 300;
+}
+
+#high-score-display {
+  font-size: 20px;
+  color: #ff0;
+  margin-bottom: 24px;
+  text-shadow: 0 0 8px #ff0, 0 0 16px rgba(255, 255, 0, 0.4);
+  letter-spacing: 2px;
+}
+
+#board-size-control {
+  margin-bottom: 28px;
+  font-size: 16px;
+  color: #aaa;
+  letter-spacing: 1px;
+}
+
+#board-size-control label {
+  margin-right: 10px;
+  color: #0ff;
+  text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+}
+
+#board-size-input {
+  width: 80px;
+  padding: 8px 10px;
+  font-size: 16px;
+  font-family: 'Courier New', Courier, monospace;
+  background: #111;
+  color: #0ff;
+  border: 2px solid #0ff;
+  border-radius: 4px;
+  text-align: center;
+  outline: none;
+  text-shadow: 0 0 6px #0ff;
+  transition: box-shadow 0.2s;
+}
+
+#board-size-input:focus {
+  box-shadow: 0 0 12px #0ff, inset 0 0 8px rgba(0, 255, 255, 0.15);
+}
+
+#start-btn {
+  padding: 14px 40px;
+  font-size: 18px;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  background: transparent;
+  color: #0f0;
+  border: 2px solid #0f0;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px #0f0;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+}
+
+#start-btn:hover {
+  background: #0f0;
+  color: #000;
+  box-shadow: 0 0 25px #0f0, 0 0 50px rgba(0, 255, 0, 0.4);
+  text-shadow: none;
+}
+
+/* ─── Ready Overlay ───────────────────────────────────────────── */
+
+#ready-overlay {
+  z-index: 11;
+}
+
+#ready-text {
+  font-size: 28px;
+  color: #0ff;
+  text-shadow: 0 0 10px #0ff, 0 0 30px #0ff;
+  letter-spacing: 4px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ─── Game Over ───────────────────────────────────────────────── */
+
+#game-over {
+  z-index: 12;
+  border: 2px solid #f00;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.4), inset 0 0 20px rgba(255, 0, 0, 0.1);
+}
+
+#game-over-text {
+  font-size: 36px;
+  color: #f00;
+  margin-bottom: 12px;
+  text-shadow: 0 0 10px #f00, 0 0 30px rgba(255, 0, 0, 0.5);
+  letter-spacing: 4px;
+  font-weight: bold;
+}
+
+#final-score {
+  font-size: 20px;
+  margin-bottom: 8px;
+  color: #ff0;
+  text-shadow: 0 0 8px #ff0;
+}
+
+#high-score-final {
+  font-size: 16px;
+  margin-bottom: 20px;
+  color: #0ff;
+  text-shadow: 0 0 6px #0ff;
+}
+
+#play-again-btn {
+  padding: 12px 32px;
+  font-size: 16px;
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  background: transparent;
+  color: #0f0;
+  border: 2px solid #0f0;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px #0f0;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+}
+
+#play-again-btn:hover {
+  background: #0f0;
+  color: #000;
+  box-shadow: 0 0 25px #0f0, 0 0 50px rgba(0, 255, 0, 0.4);
+  text-shadow: none;
+}
+
+.hidden {
+  display: none !important;
+}

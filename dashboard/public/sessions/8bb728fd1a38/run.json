@@ -1,0 +1,93 @@
+{
+  "question": {
+    "name": "browser-os",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwen3.8-27B-Q4_K_XL",
+    "provider": "idealsoft",
+    "modelId": "gamepc/qwen3.8-27b"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 1,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0,
+    "presence_penalty": 0,
+    "repeat_penalty": 1
+  },
+  "comboId": "8bb728fd1a38",
+  "piVersion": "0.84.2",
+  "startedAt": "2026-08-16T15:03:03.578Z",
+  "endedAt": "2026-08-16T15:59:58.534Z",
+  "durationMs": 3414916,
+  "status": "error",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 100,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 403059
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 102647
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Wallpaper",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 498635
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Wallpaper",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 91185
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Calculator",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 1828793
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Calculator",
+      "evaluation": true,
+      "verdict": "incomplete",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 490432
+    }
+  ]
+}

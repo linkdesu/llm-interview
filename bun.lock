@@ -62,27 +62,6 @@
         "vitest": "^4.1.10",
       },
     },
-    "dashboard-legacy": {
-      "name": "llm-interview-dashboard-legacy",
-      "version": "0.0.0",
-      "dependencies": {
-        "vue": "^3.5.39",
-      },
-      "devDependencies": {
-        "@eslint/js": "^10.0.1",
-        "@types/node": "^24.13.2",
-        "@vitejs/plugin-vue": "^6.0.7",
-        "@vue/tsconfig": "^0.9.1",
-        "eslint": "^10.7.0",
-        "eslint-plugin-vue": "^10.10.0",
-        "globals": "^17.7.0",
-        "typescript": "~6.0.2",
-        "typescript-eslint": "^8.65.0",
-        "vite": "^8.1.1",
-        "vitest": "^4.1.10",
-        "vue-tsc": "^3.3.5",
-      },
-    },
     "runner": {
       "name": "llm-interview-runner",
       "dependencies": {
@@ -997,8 +976,6 @@
     "llm-interview-analyzer": ["llm-interview-analyzer@workspace:analyzer"],
 
     "llm-interview-dashboard": ["llm-interview-dashboard@workspace:dashboard"],
-
-    "llm-interview-dashboard-legacy": ["llm-interview-dashboard-legacy@workspace:dashboard-legacy"],
 
     "llm-interview-runner": ["llm-interview-runner@workspace:runner"],
 

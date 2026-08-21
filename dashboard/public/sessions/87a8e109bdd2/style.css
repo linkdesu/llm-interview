@@ -1,0 +1,360 @@
+/* ============================================================
+   Browser OS — Desktop shell (Ticket 1)
+   Reset + base styles, desktop, icons, windows, taskbar
+   ============================================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1c1c1e;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Desktop fills the whole viewport */
+#desktop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* Default wallpaper (solid) — ticket 6 will swap this */
+  background: linear-gradient(135deg, #6a82fb 0%, #98b4fb 100%);
+}
+
+/* ---------- Desktop icons ---------- */
+.icons {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+  max-height: calc(100vh - 96px);
+}
+
+.desktop-icon {
+  width: 88px;
+  height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.desktop-icon:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.desktop-icon:active {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.desktop-icon .icon-glyph {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.desktop-icon .icon-label {
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  max-width: 82px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Windows ---------- */
+.windows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.window {
+  position: absolute;
+  min-width: 240px;
+  min-height: 160px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  /* Focused window gets a stronger, more distinct outline */
+  outline: 2px solid rgba(90, 120, 250, 0.0);
+  transition: box-shadow 0.12s ease, outline-color 0.12s ease;
+}
+
+.window.focused {
+  outline: 2px solid rgba(74, 111, 255, 0.9);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.window.maximized {
+  border-radius: 0;
+}
+
+/* Title bar */
+.title-bar {
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: #f6f6f8;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  cursor: default;
+  gap: 8px;
+}
+
+.window.focused .title-bar {
+  background: #eef1ff;
+}
+
+.title-bar .app-icon-small {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.title-bar .app-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window:not(.focused) .title-bar .app-title {
+  color: #8a8a8e;
+}
+
+/* Window control buttons (close) */
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.win-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #4a4a4e;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.win-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.win-btn.close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+/* Window body */
+.window-body {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* Placeholder content for apps (ticket 1 only) */
+.placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #6b6b70;
+  text-align: center;
+  padding: 16px;
+}
+
+.placeholder .ph-glyph {
+  font-size: 40px;
+}
+
+.placeholder .ph-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3a3a3e;
+}
+
+/* Resize handle (bottom-right) */
+.resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 3;
+}
+
+/* ---------- Context menu ---------- */
+.context-menu {
+  position: fixed;
+  min-width: 180px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border-radius: 10px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+  padding: 6px;
+  z-index: 10000;
+  pointer-events: auto;
+}
+
+.context-menu.hidden {
+  display: none;
+}
+
+.menu-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.menu-item:hover {
+  background: rgba(74, 111, 255, 0.12);
+}
+
+/* ---------- Taskbar ---------- */
+#taskbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  background: rgba(244, 244, 246, 0.78);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  z-index: 9000;
+}
+
+.taskbar-apps {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.taskbar-button {
+  height: 38px;
+  min-width: 44px;
+  max-width: 200px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #1c1c1e;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.1s ease;
+}
+
+.taskbar-button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.taskbar-button.active {
+  background: rgba(74, 111, 255, 0.16);
+  box-shadow: inset 0 -2px 0 #4a6fff;
+}
+
+.taskbar-button .tb-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.taskbar-button .tb-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Clock */
+.clock {
+  flex: 0 0 auto;
+  height: 38px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: default;
+}
+
+.clock:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* When dragging a window, prevent text selection across the desktop */
+.no-select {
+  user-select: none !important;
+}

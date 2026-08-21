@@ -1,0 +1,53 @@
+{
+  "question": {
+    "name": "snake",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwopus3.6-35B-A3B-Coder-Q5_K_M",
+    "provider": "idealsoft",
+    "modelId": "ai-02/qwopus3.6-35b-a3b-coder-q5"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 1,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "1e68e317d31a",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-08-08T08:39:08.909Z",
+  "endedAt": "2026-08-08T08:42:19.223Z",
+  "durationMs": 190308,
+  "status": "error",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 200,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 162622
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "evaluation": true,
+      "verdict": "incomplete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 27679
+    }
+  ]
+}

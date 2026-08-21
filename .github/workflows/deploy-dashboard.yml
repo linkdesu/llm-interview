@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'dashboard-legacy/**'
+      - 'dashboard/**'
       - 'package.json'
       - 'bun.lock'
       - '.github/workflows/deploy-dashboard.yml'
@@ -18,10 +18,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - name: Build
-        working-directory: dashboard-legacy
+        working-directory: dashboard
         run: bun run build
       - name: Package
-        working-directory: dashboard-legacy
+        working-directory: dashboard
         run: tar -czf deploy.tar.gz -C dist .
       - name: Upload to vxServer
         env:

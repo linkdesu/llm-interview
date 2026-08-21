@@ -2,5 +2,3 @@ node_modules
 dist
 .vite
 *.local
-# Dev-only symlink to legacy session data; the real data strategy lands with the deploy cutover (#38).
-public

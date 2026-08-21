@@ -42,7 +42,7 @@ A three-part system:
 
 ## Implementation Decisions
 
-- **Top-level layout**: `question/` (task library), `session/` (archive), `dashboard/` (existing Vite + Vue 3 + TS site), plus new `runner/` (Bun project) and `docs/` (spec/adr).
+- **Top-level layout**: `question/` (task library), `session/` (archive), `dashboard/` (Vite + React + TS site; rebuilt from the original Vue 3 implementation, see #31), plus `runner/` (Bun project), `analyzer/`, and `docs/` (spec/adr).
 - **Runner stack**: Bun + TypeScript; pi installed as a local npm dependency of the runner (version pinned in the lockfile), invoked via `node_modules/.bin/pi`.
 - **Pristine execution environment**: `PI_CODING_AGENT_DIR` points to a project-local config directory containing only the two required hand-copied files `models.json` and `auth.json`; every invocation adds `--no-extensions --no-skills --no-prompt-templates --no-themes --no-context-files`. This directory is not committed to git.
 - **Matrix definition**: cartesian product of all Questions × all Models in the registry, executed model-major; the only filters are `--question` and `--model`.

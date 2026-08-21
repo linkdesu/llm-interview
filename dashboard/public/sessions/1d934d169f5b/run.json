@@ -1,0 +1,91 @@
+{
+  "question": {
+    "name": "snake",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+    "provider": "idealsoft",
+    "modelId": "ai-01/ornith-1.5-35b"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "1d934d169f5b",
+  "piVersion": "0.84.2",
+  "startedAt": "2026-08-21T14:30:53.868Z",
+  "endedAt": "2026-08-21T15:44:55.245Z",
+  "durationMs": 4441360,
+  "status": "ok",
+  "exitCode": null,
+  "maxTurnsExceeded": true,
+  "maxTurns": 100,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 867385
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 11978
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "dirty": true,
+      "status": "error",
+      "exitCode": null,
+      "maxTurnsExceeded": true,
+      "durationMs": 975524
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 15089
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "dirty": true,
+      "status": "error",
+      "exitCode": null,
+      "maxTurnsExceeded": true,
+      "durationMs": 2557072
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 14187
+    }
+  ]
+}

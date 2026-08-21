@@ -11,4 +11,4 @@ session/*
 runner/*.json
 
 # Site favicon must be tracked despite global *.ico ignores.
-!dashboard-legacy/public/favicon.ico
+!dashboard/public/favicon.ico

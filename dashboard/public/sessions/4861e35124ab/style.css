@@ -1,0 +1,318 @@
+/* ============================================================
+   Browser OS — style.css
+   Modern flat design (Windows 11 / macOS inspired).
+   Ticket 2: wallpaper presets, desktop context menu, picker.
+   ============================================================ */
+
+/* ---------- Design tokens ---------- */
+:root {
+  --accent: #0067c0;
+  --taskbar-height: 48px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --wp-size: 32px; /* base tile size used by pattern wallpapers */
+  --font-stack: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
+    "Helvetica Neue", Arial, sans-serif;
+  --shadow-menu: 0 8px 28px rgba(0, 0, 0, 0.28);
+  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Base ---------- */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-stack);
+  font-size: 14px;
+  color: #1b1c20;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ---------- Desktop & icons ---------- */
+.desktop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--taskbar-height);
+  overflow: hidden;
+}
+
+.desktop-icons {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 92px;
+  padding: 10px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: inherit;
+  color: #fff;
+  cursor: default;
+}
+
+.desktop-icon:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.desktop-icon .icon {
+  font-size: 34px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.desktop-icon .icon-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- Taskbar & clock ---------- */
+.taskbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--taskbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  background: rgba(246, 248, 252, 0.72);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  z-index: 9000;
+}
+
+.taskbar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.clock {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #2a2c31;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- Context menu (ticket 2) ---------- */
+.context-menu {
+  position: fixed;
+  z-index: 9500;
+  min-width: 210px;
+  padding: 6px;
+  background: rgba(249, 249, 251, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-menu);
+}
+
+.context-menu[hidden] { display: none; }
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: #1b1c20;
+  cursor: pointer;
+}
+
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  background: rgba(0, 0, 0, 0.07);
+  outline: none;
+}
+
+/* ---------- Wallpaper presets (ticket 2, CSS only) ----------
+   One class per preset; applied to the desktop and to picker
+   thumbnails (which shrink --wp-size so patterns scale down). */
+.wallpaper {
+  background-color: #0f1115;
+  background-repeat: repeat;
+}
+
+/* 1. Aurora — night sky with a green aurora glow */
+.wallpaper-aurora {
+  background-image:
+    radial-gradient(ellipse 90% 55% at 50% 108%, rgba(52, 211, 153, 0.4), transparent 70%),
+    linear-gradient(180deg, #0b1026 0%, #16204a 55%, #1d3557 100%);
+}
+
+/* 2. Sunset — dusk fading into a warm horizon */
+.wallpaper-sunset {
+  background-image: linear-gradient(180deg, #2c1e4f 0%, #7b2d5e 40%, #e8593e 75%, #f9a03f 100%);
+}
+
+/* 3. Ocean — deep blue fading to teal */
+.wallpaper-ocean {
+  background-image: linear-gradient(180deg, #0f3460 0%, #1668a5 55%, #35c4b5 100%);
+}
+
+/* 4. Graphite — flat dark solid */
+.wallpaper-graphite {
+  background-color: #23252c;
+}
+
+/* 5. Mist — flat light solid */
+.wallpaper-mist {
+  background-color: #e9edf3;
+}
+
+/* 6. Dunes — warm diagonal stripes */
+.wallpaper-dunes {
+  background-color: #efe0bd;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(196, 145, 58, 0.25) 0 calc(var(--wp-size) / 2),
+    transparent calc(var(--wp-size) / 2) var(--wp-size)
+  );
+}
+
+/* 7. Grid — subtle graph paper */
+.wallpaper-grid {
+  background-color: #e4eaf3;
+  background-image:
+    linear-gradient(rgba(64, 94, 151, 0.18) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, rgba(64, 94, 151, 0.18) 1.5px, transparent 1.5px);
+  background-size: var(--wp-size) var(--wp-size);
+}
+
+/* 8. Bubbles — offset dot pattern */
+.wallpaper-bubbles {
+  background-color: #35549c;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.16) 17%, transparent 18%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.08) 17%, transparent 18%);
+  background-size:
+    var(--wp-size) var(--wp-size),
+    calc(var(--wp-size) * 1.5) calc(var(--wp-size) * 1.5);
+  background-position:
+    0 0,
+    calc(var(--wp-size) * 0.5) calc(var(--wp-size) * 0.5);
+}
+
+/* ---------- Wallpaper picker (ticket 2) ---------- */
+.picker {
+  position: fixed;
+  inset: 0;
+  z-index: 9400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 17, 21, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.picker[hidden] { display: none; }
+
+.picker-panel {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  padding: 18px 20px 20px;
+  background: rgba(250, 250, 251, 0.97);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+}
+
+.picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.picker-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.picker-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+  color: #444;
+  cursor: pointer;
+}
+
+.picker-close:hover { background: rgba(0, 0, 0, 0.08); }
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px 12px;
+}
+
+.picker-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.picker-thumb-swatch {
+  --wp-size: 16px; /* pattern scale for the small preview */
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.14);
+}
+
+.picker-thumb-name {
+  font-size: 12px;
+  text-align: center;
+  color: #33353b;
+}
+
+.picker-thumb[aria-pressed="true"] .picker-thumb-swatch {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.picker-thumb[aria-pressed="true"] .picker-thumb-name {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+@media (max-width: 480px) {
+  .picker-grid { grid-template-columns: repeat(2, 1fr); }
+}

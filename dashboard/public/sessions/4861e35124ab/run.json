@@ -1,0 +1,85 @@
+{
+  "question": {
+    "name": "browser-os",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwen3.8-27B",
+    "provider": "idealsoft",
+    "modelId": "gamepc/qwen3.8-27b"
+  },
+  "params": {
+    "thinking": "on",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "4861e35124ab",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-08-16T11:09:44.521Z",
+  "endedAt": "2026-08-16T11:43:00.846Z",
+  "durationMs": 1996307,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 100,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 251949
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Wallpaper",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 536137
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Calculator",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 293447
+    },
+    {
+      "ticket": 4,
+      "ticketTitle": "Notepad",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 304223
+    },
+    {
+      "ticket": 5,
+      "ticketTitle": "Minesweeper",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 299288
+    },
+    {
+      "ticket": 6,
+      "ticketTitle": "Spider Solitaire",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 311102
+    }
+  ]
+}

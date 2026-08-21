@@ -1,0 +1,58 @@
+{
+  "question": {
+    "name": "snake",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwen3.8-27B",
+    "provider": "idealsoft",
+    "modelId": "gamepc/qwen3.8-27b"
+  },
+  "params": {
+    "thinking": "on",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "4e78a712f6db",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-08-16T11:48:10.569Z",
+  "endedAt": "2026-08-16T12:04:02.512Z",
+  "durationMs": 951937,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 100,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 415806
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 261445
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 274677
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browser OS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Desktop: wallpaper background, app icons, and the floating window layer -->
+  <div id="desktop">
+    <div id="icons">
+      <button class="desktop-icon" data-app="notepad" title="Double-click to open Notepad">
+        <span class="icon-glyph" aria-hidden="true">📝</span>
+        <span class="icon-label">Notepad</span>
+      </button>
+      <button class="desktop-icon" data-app="calculator" title="Double-click to open Calculator">
+        <span class="icon-glyph" aria-hidden="true">🧮</span>
+        <span class="icon-label">Calculator</span>
+      </button>
+      <button class="desktop-icon" data-app="minesweeper" title="Double-click to open Minesweeper">
+        <span class="icon-glyph" aria-hidden="true">💣</span>
+        <span class="icon-label">Minesweeper</span>
+      </button>
+      <button class="desktop-icon" data-app="spider" title="Double-click to open Spider Solitaire">
+        <span class="icon-glyph" aria-hidden="true">🕷️</span>
+        <span class="icon-label">Spider Solitaire</span>
+      </button>
+    </div>
+    <div id="windows"></div>
+  </div>
+
+  <!-- Taskbar: one button per open window, plus the clock at the right end -->
+  <div id="taskbar">
+    <div id="taskbar-buttons" role="toolbar" aria-label="Open windows"></div>
+    <div id="clock" aria-label="Current time"></div>
+  </div>
+
+  <!-- Desktop context menu (ticket 2); positioned and shown by script.js -->
+  <div id="context-menu" role="menu" aria-label="Desktop menu">
+    <button class="context-menu-item" role="menuitem" data-action="wallpaper">
+      <span class="context-menu-icon" aria-hidden="true">🖼️</span>
+      <span>Change wallpaper</span>
+    </button>
+  </div>
+
+  <!-- Wallpaper preset picker (ticket 2); thumbnails built by script.js -->
+  <div id="wallpaper-picker" role="dialog" aria-label="Change wallpaper">
+    <div class="picker-titlebar">
+      <span class="picker-title">Change wallpaper</span>
+      <button class="close-btn" id="picker-close" aria-label="Close wallpaper picker">✕</button>
+    </div>
+    <div class="picker-grid" id="picker-grid"></div>
+    <div class="picker-footer">
+      <button class="picker-close-btn" id="picker-done">Done</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

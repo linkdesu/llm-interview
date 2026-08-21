@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser OS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Desktop area -->
+  <div id="desktop">
+    <!-- Desktop icons -->
+    <div id="desktop-icons">
+      <div class="desktop-icon" data-app="notepad" title="Notepad">
+        <svg class="icon" viewBox="0 0 32 32" width="48" height="48">
+          <rect x="6" y="2" width="20" height="28" rx="2" fill="#4a90d9"/>
+          <rect x="8" y="4" width="16" height="24" rx="1" fill="#fff"/>
+          <line x1="10" y1="8" x2="22" y2="8" stroke="#ccc" stroke-width="1"/>
+          <line x1="10" y1="12" x2="22" y2="12" stroke="#ccc" stroke-width="1"/>
+          <line x1="10" y1="16" x2="22" y2="16" stroke="#ccc" stroke-width="1"/>
+        </svg>
+        <span class="icon-label">Notepad</span>
+      </div>
+      <div class="desktop-icon" data-app="calculator" title="Calculator">
+        <svg class="icon" viewBox="0 0 32 32" width="48" height="48">
+          <rect x="4" y="2" width="24" height="28" rx="2" fill="#2d6a4f"/>
+          <rect x="6" y="4" width="20" height="8" rx="1" fill="#95d5b2"/>
+          <rect x="6" y="14" width="5" height="4" rx="1" fill="#e0f0e7"/>
+          <rect x="13.5" y="14" width="5" height="4" rx="1" fill="#e0f0e7"/>
+          <rect x="21" y="14" width="5" height="4" rx="1" fill="#d4edda"/>
+          <rect x="6" y="20" width="5" height="4" rx="1" fill="#e0f0e7"/>
+          <rect x="13.5" y="20" width="5" height="4" rx="1" fill="#e0f0e7"/>
+          <rect x="21" y="20" width="5" height="4" rx="1" fill="#d4edda"/>
+          <rect x="6" y="26" width="20" height="4" rx="1" fill="#b7e4c7"/>
+        </svg>
+        <span class="icon-label">Calculator</span>
+      </div>
+      <div class="desktop-icon" data-app="minesweeper" title="Minesweeper">
+        <svg class="icon" viewBox="0 0 32 32" width="48" height="48">
+          <rect x="4" y="2" width="24" height="28" rx="2" fill="#e76f51"/>
+          <rect x="6" y="4" width="6" height="6" rx="1" fill="#fff"/>
+          <rect x="14" y="4" width="6" height="6" rx="1" fill="#fff"/>
+          <rect x="6" y="12" width="6" height="6" rx="1" fill="#fff"/>
+          <rect x="14" y="12" width="6" height="6" rx="1" fill="#fff"/>
+          <rect x="6" y="20" width="6" height="6" rx="1" fill="#fff"/>
+          <rect x="14" y="20" width="6" height="6" rx="1" fill="#fff"/>
+          <circle cx="17" cy="15" r="2" fill="#222"/>
+        </svg>
+        <span class="icon-label">Minesweeper</span>
+      </div>
+      <div class="desktop-icon" data-app="spidersolitaire" title="Spider Solitaire">
+        <svg class="icon" viewBox="0 0 32 32" width="48" height="48">
+          <rect x="2" y="4" width="12" height="24" rx="2" fill="#8338ec"/>
+          <rect x="10" y="6" width="12" height="24" rx="2" fill="#8338ec"/>
+          <rect x="18" y="8" width="12" height="24" rx="2" fill="#8338ec"/>
+          <rect x="4" y="10" width="8" height="16" rx="1" fill="#fff"/>
+          <rect x="12" y="12" width="8" height="16" rx="1" fill="#fff"/>
+          <rect x="20" y="14" width="8" height="16" rx="1" fill="#fff"/>
+          <path d="M6 12 L8 10 L10 12" stroke="#8338ec" stroke-width="1.5" fill="none"/>
+          <path d="M14 14 L16 12 L18 14" stroke="#8338ec" stroke-width="1.5" fill="none"/>
+        </svg>
+        <span class="icon-label">Spider Solitaire</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Taskbar -->
+  <div id="taskbar">
+    <div id="taskbar-left">
+      <!-- Taskbar buttons go here -->
+    </div>
+    <div id="taskbar-clock">
+      <!-- Clock display -->
+    </div>
+  </div>
+
+  <!-- Window template (hidden, cloned dynamically) -->
+  <template id="window-template">
+    <div class="window" data-app="">
+      <div class="window-titlebar">
+        <span class="window-title"></span>
+        <button class="window-close" title="Close">&#x2715;</button>
+      </div>
+      <div class="window-content"></div>
+    </div>
+  </template>
+
+  <script src="script.js"></script>
+</body>
+</html>

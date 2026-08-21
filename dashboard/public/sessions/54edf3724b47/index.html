@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Time Machine - 3D Diorama</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="city-canvas"></canvas>
+    </div>
+    
+    <div id="controls">
+        <button id="play-btn" class="control-btn">
+            <span class="icon">🎵</span>
+            <span class="text">Play Music</span>
+        </button>
+        <button id="auto-rotate-btn" class="control-btn active">
+            <span class="icon">🔄</span>
+            <span class="text">Auto Rotate</span>
+        </button>
+        <button id="time-btn" class="control-btn">
+            <span class="icon">🌅</span>
+            <span class="text">Time of Day</span>
+        </button>
+        <button id="reset-btn" class="control-btn">
+            <span class="icon">🏠</span>
+            <span class="text">Reset View</span>
+        </button>
+    </div>
+    
+    <div id="info-panel">
+        <h2>City Time Machine</h2>
+        <p>Orbit: Left-click + drag</p>
+        <p>Zoom: Scroll wheel</p>
+        <p>Pan: Right-click + drag</p>
+    </div>
+    
+    <div id="loading">
+        <div class="loading-spinner"></div>
+        <p>Loading your cozy city...</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

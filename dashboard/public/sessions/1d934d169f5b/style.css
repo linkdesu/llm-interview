@@ -1,0 +1,198 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* Near-black background for the neon aesthetic. */
+  background: radial-gradient(ellipse at center, #0a0a14 0%, #000000 70%);
+  color: #e8ffff;
+  font-family: "Segoe UI", "SF Pro Display", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  /* Subtle neon ambient glow behind everything. */
+  overflow: hidden;
+}
+
+#wrap {
+  text-align: center;
+  width: 100%;
+  max-width: 640px;
+  padding: 16px;
+}
+
+h1 {
+  margin-bottom: 12px;
+  font-size: 34px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  /* Neon glow on the title. */
+  color: #66ffff;
+  text-shadow:
+    0 0 4px #66ffff,
+    0 0 12px #00e6e6,
+    0 0 24px #009999;
+}
+
+/* --- Start menu --- */
+#menu {
+  background: rgba(10, 20, 28, 0.75);
+  border: 1px solid #1fffdf55;
+  border-radius: 10px;
+  padding: 24px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  /* Neon panel glow. */
+  box-shadow:
+    0 0 8px #00e6e655,
+    inset 0 0 18px #00e6e618;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 280px;
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #b8ffff;
+}
+
+#boardSize {
+  width: 80px;
+  padding: 6px 8px;
+  font-size: 15px;
+  font-family: inherit;
+  background: #000;
+  color: #66ffff;
+  border: 1px solid #1fffcf88;
+  border-radius: 4px;
+  text-align: center;
+  letter-spacing: 1px;
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+#boardSize:focus {
+  border-color: #66ffff;
+  box-shadow: 0 0 10px #66ffff88;
+}
+
+#startBtn {
+  font-size: 17px;
+  font-family: inherit;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 12px 34px;
+  cursor: pointer;
+  background: #000;
+  color: #39ff8a;
+  border: 1px solid #39ff8a;
+  border-radius: 6px;
+  /* Neon glow on the primary button. */
+  box-shadow: 0 0 8px #39ff8a66, inset 0 0 8px #39ff8a22;
+  transition: box-shadow 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+#startBtn:hover {
+  background: rgba(57, 255, 138, 0.14);
+  box-shadow: 0 0 16px #39ff8aa0, inset 0 0 12px #39ff8a33;
+}
+
+#startBtn:active {
+  transform: scale(0.97);
+}
+
+/* --- Score --- */
+#score {
+  margin-bottom: 8px;
+  font-size: 20px;
+  letter-spacing: 3px;
+  color: #e8ffff;
+  text-shadow: 0 0 6px #00e6e6, 0 0 14px #00999988;
+}
+
+/* --- Board --- */
+#board {
+  position: relative;
+  width: 100%;
+  height: auto;
+  background: #000;
+  border: 1px solid #1fffcf66;
+  border-radius: 6px;
+  /* Neon frame glow. */
+  box-shadow: 0 0 14px #00e6e655, inset 0 0 20px #00e6e618;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#overlay,
+#gameover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.78);
+  color: #e8ffff;
+  font-size: 24px;
+  letter-spacing: 3px;
+  text-align: center;
+  gap: 14px;
+  /* Neon text glow on overlays. */
+  text-shadow: 0 0 6px #00e6e6, 0 0 16px #00999988;
+  animation: neonPulse 1.8s ease-in-out infinite;
+}
+
+#finalScore {
+  font-size: 18px;
+  color: #ff5fd8;
+  text-shadow: 0 0 6px #ff5fd8, 0 0 14px #ff2bb088;
+}
+
+button {
+  font-size: 16px;
+  font-family: inherit;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 10px 24px;
+  cursor: pointer;
+  background: #000;
+  color: #ff5fd8;
+  border: 1px solid #ff5fd8;
+  border-radius: 6px;
+  /* Neon glow on interactive buttons. */
+  box-shadow: 0 0 8px #ff5fd855, inset 0 0 8px #ff5fd822;
+  transition: box-shadow 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+button:hover {
+  background: rgba(255, 95, 216, 0.14);
+  box-shadow: 0 0 16px #ff5fd899, inset 0 0 12px #ff5fd833;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+@keyframes neonPulse {
+  0%, 100% { box-shadow: inset 0 0 24px #00e6e622; }
+  50%      { box-shadow: inset 0 0 34px #00e6e644; }
+}
+
+.hidden {
+  display: none !important;
+}

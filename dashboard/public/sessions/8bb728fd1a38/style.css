@@ -1,0 +1,664 @@
+/* ============================================================
+   Browser OS — desktop shell (ticket 1)
+   Flat, modern look: rounded corners, soft shadows,
+   translucent blurred taskbar, system font stack.
+   ============================================================ */
+
+:root {
+  --accent: #4a7dff;
+  --accent-soft: rgba(74, 125, 255, 0.22);
+  --window-bg: rgba(250, 251, 253, 0.94);
+  --window-border: rgba(255, 255, 255, 0.55);
+  --titlebar-bg: rgba(238, 242, 248, 0.92);
+  --text: #1d2430;
+  --text-soft: #5b6472;
+  --shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  --shadow-focused: 0 18px 44px rgba(15, 23, 42, 0.34);
+  --radius: 12px;
+  --taskbar-height: 48px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Desktop ---------- */
+
+/* Fills the viewport above the taskbar.
+   Wallpaper: one of the eight CSS presets below is applied as a
+   "wallpaper-*" class (see ticket 2); .wallpaper-aurora is the default. */
+#desktop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--taskbar-height);
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ---------- Wallpaper presets (ticket 2) ----------
+   Pure CSS: solids, gradients, and simple repeating patterns. */
+
+/* Gradients */
+.wallpaper-aurora {
+  background: linear-gradient(135deg, #8ec5ff 0%, #6a8dff 55%, #9b6dff 100%);
+}
+
+.wallpaper-ocean {
+  background: linear-gradient(180deg, #0b3a67 0%, #1d6fb8 45%, #79c4f0 100%);
+}
+
+.wallpaper-sunset {
+  background: linear-gradient(135deg, #ffb75e 0%, #ff7a59 45%, #c04bd6 100%);
+}
+
+.wallpaper-forest {
+  background: linear-gradient(160deg, #0f3d33 0%, #2f8f5b 60%, #a8d98a 100%);
+}
+
+/* Solids */
+.wallpaper-midnight {
+  background: #171b2e;
+}
+
+.wallpaper-cloud {
+  background: #e8ecf3;
+}
+
+/* Simple patterns */
+.wallpaper-grid {
+  background-color: #1f2735;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.wallpaper-dots {
+  background-color: #f5f1e8;
+  background-image: radial-gradient(rgba(90, 70, 40, 0.18) 2px, transparent 2.6px);
+  background-size: 26px 26px;
+}
+
+/* ---------- Desktop icons ---------- */
+
+#icons {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: calc(100% - 28px);
+}
+
+.desktop-icon {
+  width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  font-family: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.desktop-icon:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.desktop-icon:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.desktop-icon.selected {
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.icon-glyph {
+  font-size: 40px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+.icon-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+/* ---------- Windows ---------- */
+
+#windows {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  min-height: 150px;
+  background: var(--window-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* Focused window: stronger shadow + highlighted title bar */
+.window.focused {
+  box-shadow: var(--shadow-focused);
+}
+
+.window.focused .titlebar {
+  background: #fff;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Title bar: app name + close button, drag handle */
+.titlebar {
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  background: var(--titlebar-bg);
+  touch-action: none;
+}
+
+.window.dragging .titlebar {
+  cursor: grabbing;
+}
+
+.titlebar-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.titlebar-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.window:not(.focused) .titlebar-title {
+  color: var(--text-soft);
+}
+
+.close-btn {
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  background: rgba(208, 62, 62, 0.14);
+  color: #c0392b;
+}
+
+.close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Window body — placeholder content until app tickets land */
+.window-content {
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+  overflow: auto;
+}
+
+.placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 13.5px;
+}
+
+.placeholder .placeholder-glyph {
+  font-size: 48px;
+  line-height: 1;
+}
+
+/* ---------- Taskbar ---------- */
+
+#taskbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--taskbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px 0 12px;
+  background: rgba(250, 251, 253, 0.62);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+  z-index: 100000;
+}
+
+#taskbar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.taskbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 180px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.taskbar-btn:hover {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.taskbar-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Highlighted state for the focused window's button */
+.taskbar-btn.active {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(74, 125, 255, 0.4);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
+.taskbar-btn .taskbar-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+#clock {
+  flex: 0 0 auto;
+  min-width: 58px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* ---------- Context menu (ticket 2) ---------- */
+
+#context-menu {
+  position: fixed;
+  z-index: 200000;
+  min-width: 200px;
+  padding: 6px;
+  display: none;
+  background: var(--window-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--window-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-focused);
+}
+
+#context-menu.open {
+  display: block;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: var(--accent-soft);
+}
+
+.context-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.context-menu-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ---------- Wallpaper picker (ticket 2) ---------- */
+
+#wallpaper-picker {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 150000;
+  width: min(580px, calc(100vw - 32px));
+  transform: translate(-50%, -50%);
+  display: none;
+  flex-direction: column;
+  background: var(--window-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--window-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-focused);
+}
+
+#wallpaper-picker.open {
+  display: flex;
+}
+
+.picker-titlebar {
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+}
+
+.picker-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 6px 18px 14px;
+}
+
+@media (max-width: 520px) {
+  .picker-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.wallpaper-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.thumb-swatch {
+  height: 74px;
+  border-radius: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+/* Selected preset: accent ring + check badge */
+.wallpaper-thumb.selected .thumb-swatch {
+  outline-color: var(--accent);
+}
+
+.thumb-check {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.thumb-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text-soft);
+}
+
+.wallpaper-thumb.selected .thumb-label {
+  color: var(--text);
+}
+
+.wallpaper-thumb:hover .thumb-swatch {
+  filter: brightness(1.05);
+}
+
+.wallpaper-thumb:focus-visible {
+  outline: none;
+}
+
+.wallpaper-thumb:focus-visible .thumb-swatch {
+  outline-color: var(--accent);
+}
+
+.picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 14px 14px;
+}
+
+.picker-close-btn {
+  padding: 7px 18px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.picker-close-btn:hover {
+  background: #f0f3f8;
+}
+
+.picker-close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---------- Calculator (ticket 3) ---------- */
+
+.calc {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 4px 6px;
+}
+
+.calc-display {
+  flex: 0 0 auto;
+  min-height: 54px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 8px 14px;
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  line-height: 1.15;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Longer numbers step down so they stay readable */
+.calc-display-small {
+  font-size: 22px;
+}
+
+.calc-display-tiny {
+  font-size: 16px;
+}
+
+.calc-display-error {
+  color: #c0392b;
+}
+
+.calc-keys {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 7px;
+}
+
+.calc-key {
+  border: none;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+  transition: background 0.12s ease, transform 0.05s ease;
+}
+
+.calc-key:hover {
+  background: #f2f5fa;
+}
+
+.calc-key:active,
+.calc-key.pressed {
+  background: #e4eaf4;
+  transform: scale(0.97);
+}
+
+.calc-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Utility column: sign, percent, operators */
+.calc-key-util {
+  background: #eef1f7;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.calc-key-util:hover {
+  background: #e2e8f2;
+}
+
+/* Clear key: subtle warning tint */
+.calc-key-clear {
+  background: #fdeeee;
+  color: #c0392b;
+  font-weight: 600;
+}
+
+.calc-key-clear:hover {
+  background: #f8dcdc;
+}
+
+/* Equals key: accent */
+.calc-key-equals {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.calc-key-equals:hover {
+  background: #3d6cf0;
+}
+
+/* Zero key spans the two cells left of "decimal" */
+.calc-key-zero {
+  grid-column: span 2;
+}

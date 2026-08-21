@@ -1,0 +1,56 @@
+{
+  "question": {
+    "name": "browser-os",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Qwopus3.6-35B-A3B-Coder-Q5_K_M",
+    "provider": "idealsoft",
+    "modelId": "ai-02/qwopus3.6-35b-a3b-coder-q5"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 1,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 2
+  },
+  "comboId": "763e9741afe4",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-08-08T08:07:27.212Z",
+  "endedAt": "2026-08-08T08:19:38.692Z",
+  "durationMs": 730617,
+  "status": "error",
+  "exitCode": null,
+  "maxTurnsExceeded": true,
+  "maxTurns": 200,
+  "contractViolations": [
+    "unexpected file: screenshot1.png",
+    "unexpected file: screenshot2.png"
+  ],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "dirty": true,
+      "status": "error",
+      "exitCode": null,
+      "maxTurnsExceeded": true,
+      "durationMs": 580432
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "evaluation": true,
+      "verdict": null,
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 149822
+    }
+  ]
+}

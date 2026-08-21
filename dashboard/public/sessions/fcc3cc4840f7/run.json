@@ -1,0 +1,29 @@
+{
+  "question": {
+    "name": "city-time-machine",
+    "hasSpec": false,
+    "hasTickets": false
+  },
+  "model": {
+    "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+    "provider": "idealsoft",
+    "modelId": "ai-01/ornith-1.5-35b"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "fcc3cc4840f7",
+  "piVersion": "0.84.2",
+  "startedAt": "2026-08-21T12:08:08.850Z",
+  "endedAt": "2026-08-21T12:43:09.613Z",
+  "durationMs": 2100704,
+  "status": "error",
+  "exitCode": null,
+  "maxTurnsExceeded": true,
+  "maxTurns": 100,
+  "contractViolations": []
+}

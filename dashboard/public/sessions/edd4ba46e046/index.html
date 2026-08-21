@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browser OS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Desktop area -->
+  <div id="desktop">
+    <!-- Desktop icons grid -->
+    <div id="desktop-icons">
+      <div class="desktop-icon" data-app="notepad" title="Notepad">
+        <div class="icon-symbol">📝</div>
+        <span class="icon-label">Notepad</span>
+      </div>
+      <div class="desktop-icon" data-app="calculator" title="Calculator">
+        <div class="icon-symbol">🔢</div>
+        <span class="icon-label">Calculator</span>
+      </div>
+      <div class="desktop-icon" data-app="minesweeper" title="Minesweeper">
+        <div class="icon-symbol">💣</div>
+        <span class="icon-label">Minesweeper</span>
+      </div>
+      <div class="desktop-icon" data-app="spider" title="Spider Solitaire">
+        <div class="icon-symbol">🕷️</div>
+        <span class="icon-label">Spider Solitaire</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Window container (windows are created here dynamically) -->
+  <div id="window-container"></div>
+
+  <!-- Taskbar -->
+  <div id="taskbar">
+    <div id="taskbar-buttons"></div>
+    <div id="taskbar-clock"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

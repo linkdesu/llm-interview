@@ -1,0 +1,299 @@
+/* Snake — neon / geometric visual theme (ticket 3).
+   Palette: near-black background, cyan #00f0ff, magenta #ff3df5,
+   violet #7b3dff. All glows via text-shadow / box-shadow. */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1100px 750px at 50% 12%, rgba(0, 240, 255, 0.07), transparent 62%),
+    radial-gradient(950px 700px at 50% 108%, rgba(255, 61, 245, 0.06), transparent 62%),
+    #030308;
+  color: #d8fbff;
+  /* Clean geometric sans-serif stack (system fonts only, no web assets). */
+  font-family: "Century Gothic", "Futura", "Avenir Next", "Trebuchet MS",
+    "Segoe UI", Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+}
+
+/* --- Start menu --- */
+#menu {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+}
+
+#menu[hidden] {
+  display: none;
+}
+
+#title {
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: 14px;
+  /* Offset so the glow does not clip the final letter. */
+  text-indent: 14px;
+  margin-bottom: 12px;
+  color: #00f0ff;
+  text-shadow:
+    0 0 6px rgba(0, 240, 255, 0.9),
+    0 0 22px rgba(0, 240, 255, 0.55),
+    0 0 55px rgba(0, 240, 255, 0.35);
+}
+
+.menu-label {
+  font-size: 15px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #6fd7e8;
+}
+
+#board-size {
+  width: 90px;
+  font-size: 18px;
+  padding: 6px 8px;
+  text-align: center;
+  font-family: inherit;
+  color: #eaffff;
+  background: rgba(0, 20, 30, 0.85);
+  border: 2px solid #0e7f95;
+  border-radius: 6px;
+  box-shadow:
+    0 0 10px rgba(0, 240, 255, 0.18),
+    inset 0 0 8px rgba(0, 240, 255, 0.12);
+}
+
+#board-size:focus {
+  outline: none;
+  border-color: #00f0ff;
+  box-shadow:
+    0 0 16px rgba(0, 240, 255, 0.55),
+    inset 0 0 8px rgba(0, 240, 255, 0.2);
+}
+
+#board-size::-webkit-outer-spin-button,
+#board-size::-webkit-inner-spin-button {
+  opacity: 1;
+}
+
+#size-note {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #4f8a99;
+  margin-top: -6px;
+}
+
+#menu-high {
+  font-size: 17px;
+  letter-spacing: 1px;
+  margin-top: 6px;
+  color: #ff9df0;
+  text-shadow: 0 0 12px rgba(255, 61, 245, 0.45);
+}
+
+/* Neon buttons: dark core, glowing border, brighter on hover/press. */
+#start-btn,
+#play-again {
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 12px 30px;
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.06);
+  border: 2px solid #00f0ff;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow:
+    0 0 14px rgba(0, 240, 255, 0.35),
+    inset 0 0 10px rgba(0, 240, 255, 0.15);
+  transition: box-shadow 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+#start-btn:hover,
+#play-again:hover {
+  color: #eaffff;
+  background: rgba(0, 240, 255, 0.16);
+  box-shadow:
+    0 0 26px rgba(0, 240, 255, 0.7),
+    inset 0 0 16px rgba(0, 240, 255, 0.3);
+}
+
+#start-btn:focus-visible,
+#play-again:focus-visible {
+  outline: 2px solid #eaffff;
+  outline-offset: 3px;
+}
+
+#menu-hint {
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: #4f8a99;
+  margin-top: 10px;
+}
+
+/* --- Game screen --- */
+#game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  justify-content: center;
+}
+
+#game[hidden] {
+  display: none;
+}
+
+/* --- HUD --- */
+#hud {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 16px;
+}
+
+#game-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 5px;
+  color: #00f0ff;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+#score {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #eaffff;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.65);
+}
+
+/* --- Board --- */
+#board-wrap {
+  position: relative;
+}
+
+#board {
+  display: block;
+  background: #030308;
+  border: 2px solid rgba(0, 240, 255, 0.55);
+  border-radius: 4px;
+  box-shadow:
+    0 0 18px rgba(0, 240, 255, 0.35),
+    0 0 60px rgba(0, 240, 255, 0.12);
+}
+
+/* --- Overlays (ready + game over) --- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 4, 10, 0.72);
+  border-radius: 4px;
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay-box {
+  text-align: center;
+  background: rgba(5, 8, 16, 0.92);
+  border: 2px solid rgba(0, 240, 255, 0.55);
+  border-radius: 10px;
+  padding: 26px 36px;
+  box-shadow:
+    0 0 22px rgba(0, 240, 255, 0.35),
+    inset 0 0 14px rgba(0, 240, 255, 0.08);
+}
+
+.overlay-box h2 {
+  font-size: 24px;
+  letter-spacing: 3px;
+  margin-bottom: 12px;
+}
+
+.overlay-box p {
+  font-size: 16px;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  color: #bfefff;
+}
+
+#ready-text {
+  font-size: 19px;
+  letter-spacing: 2px;
+  margin-bottom: 0;
+  color: #eaffff;
+  text-shadow: 0 0 14px rgba(0, 240, 255, 0.8);
+  animation: readyPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes readyPulse {
+  0%,
+  100% {
+    opacity: 1;
+    text-shadow: 0 0 14px rgba(0, 240, 255, 0.8);
+  }
+  50% {
+    opacity: 0.55;
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+  }
+}
+
+#gameover-title {
+  color: #ff3df5;
+  text-shadow:
+    0 0 10px rgba(255, 61, 245, 0.85),
+    0 0 34px rgba(255, 61, 245, 0.5);
+}
+
+#final-score {
+  color: #eaffff;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+}
+
+#final-high {
+  color: #ff9df0;
+  text-shadow: 0 0 12px rgba(255, 61, 245, 0.45);
+  margin-bottom: 22px;
+}
+
+#play-again {
+  font-size: 16px;
+  padding: 9px 24px;
+}
+
+/* --- Footer hint --- */
+#hint {
+  margin-top: 14px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #4f8a99;
+}

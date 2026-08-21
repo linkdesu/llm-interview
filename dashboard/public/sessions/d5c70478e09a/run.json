@@ -1,0 +1,33 @@
+{
+  "question": {
+    "name": "city-time-machine",
+    "hasSpec": false,
+    "hasTickets": false
+  },
+  "model": {
+    "name": "Qwen3.8-27B",
+    "provider": "idealsoft",
+    "modelId": "gamepc/qwen3.8-27b"
+  },
+  "params": {
+    "thinking": "on",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "d5c70478e09a",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-08-16T11:43:00.849Z",
+  "endedAt": "2026-08-16T11:48:10.566Z",
+  "durationMs": 309715,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 100,
+  "contractViolations": [
+    "missing expected artifact: index.html",
+    "missing expected artifact: style.css",
+    "missing expected artifact: script.js"
+  ]
+}

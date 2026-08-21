@@ -1,0 +1,91 @@
+{
+  "question": {
+    "name": "snake",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Ornith-1.0-35B",
+    "provider": "idealsoft",
+    "modelId": "ai-01/ornith-1.0-35b"
+  },
+  "params": {
+    "thinking": "on",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "edb63fd5eca3",
+  "piVersion": "0.81.1",
+  "startedAt": "2026-08-15T18:02:34.444Z",
+  "endedAt": "2026-08-15T18:46:56.539Z",
+  "durationMs": 2662080,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 100,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 594117
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Minimal playable snake: A bare-bones but fully functional snake game with minimal styling.",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 27583
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 802603
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Start menu + score system",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 74792
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 1134902
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Neon visual polish",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 28062
+    }
+  ]
+}

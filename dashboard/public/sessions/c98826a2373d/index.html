@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Start menu (visible until the game starts) -->
+  <section id="menu">
+    <h1 id="title">SNAKE</h1>
+
+    <label class="menu-label" for="board-size">Board size</label>
+    <input id="board-size" type="number" min="10" max="99" step="1" value="20">
+    <p id="size-note">10 to 99, capped by your viewport</p>
+
+    <div id="menu-high">Session high score: 0</div>
+
+    <button id="start-btn">Start Game</button>
+
+    <p id="menu-hint">Move with the Arrow keys or WASD</p>
+  </section>
+
+  <!-- Game screen (hidden until Start Game is clicked) -->
+  <section id="game" hidden>
+    <header id="hud">
+      <h2 id="game-title">SNAKE</h2>
+      <div id="score">Score: <span id="score-value">0</span></div>
+    </header>
+
+    <main id="board-wrap">
+      <canvas id="board" aria-label="Snake game board"></canvas>
+
+      <!-- Ready overlay: removed on any key press -->
+      <div id="ready" class="overlay" hidden>
+        <div class="overlay-box">
+          <p id="ready-text">Press any key to start</p>
+        </div>
+      </div>
+
+      <!-- Game-over overlay -->
+      <div id="gameover" class="overlay" hidden>
+        <div class="overlay-box">
+          <h2 id="gameover-title">GAME OVER</h2>
+          <p id="final-score">Final score: 0</p>
+          <p id="final-high">Session high score: 0</p>
+          <button id="play-again">Play Again</button>
+        </div>
+      </div>
+    </main>
+
+    <footer id="hint">Arrow keys / WASD</footer>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>

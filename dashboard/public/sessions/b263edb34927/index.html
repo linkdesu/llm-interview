@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>City Time Machine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Three.js canvas container -->
+  <div id="canvas-container"></div>
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div class="loader">
+      <div class="loader-inner"></div>
+      <p>Building the city block…</p>
+    </div>
+  </div>
+
+  <!-- Audio controls -->
+  <div id="audio-controls">
+    <button id="audio-toggle" class="audio-btn" title="Toggle Lo-Fi Music">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Info panel -->
+  <div id="info-panel">
+    <h2>City Time Machine</h2>
+    <p>Orbit around the diorama • Scroll to zoom • Drag to rotate</p>
+  </div>
+
+  <!-- Three.js via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Our main script -->
+  <script src="script.js"></script>
+</body>
+</html>

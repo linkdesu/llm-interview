@@ -1,0 +1,55 @@
+{
+  "question": {
+    "name": "browser-os",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+    "provider": "idealsoft",
+    "modelId": "ai-01/ornith-1.5-35b"
+  },
+  "params": {
+    "thinking": "off",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "87a8e109bdd2",
+  "piVersion": "0.84.2",
+  "startedAt": "2026-08-21T17:41:16.400Z",
+  "endedAt": "2026-08-21T18:03:28.910Z",
+  "durationMs": 1332502,
+  "status": "error",
+  "exitCode": null,
+  "maxTurnsExceeded": true,
+  "maxTurns": 100,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "dirty": true,
+      "status": "error",
+      "exitCode": null,
+      "maxTurnsExceeded": true,
+      "durationMs": 1292664
+    },
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "evaluation": true,
+      "verdict": "incomplete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 39721
+    }
+  ],
+  "failureReason": {
+    "kind": "incomplete",
+    "message": "ticket 1 (Desktop shell: Window manager and taskbar.) was judged INCOMPLETE by its evaluation"
+  }
+}
