@@ -99,7 +99,66 @@ function readRunMeta(runDir: string): { status: string | null; failureReason: Fa
       failureReason = { kind: reason['kind'], message: reason['message'] }
     }
   }
+  // Legacy archives predate the structured failureReason field: their
+  // failure signals still live in apiError / maxTurnsExceeded /
+  // invocations[].verdict etc. Rebuild the reason for an error-status run
+  // so the sidebar hover explains why it failed instead of a bare "error".
+  if (failureReason === null && status === 'error') {
+    failureReason = deriveLegacyFailureReason(record)
+  }
   return { status, failureReason }
+}
+
+/**
+ * Rebuild a human-readable failure reason from the pre-failureReason
+ * run.json fields, mirroring the runner's deriveFailureReason priority:
+ * terminal API failure, then a loop defect, then an INCOMPLETE verdict,
+ * then a max-turn kill, then a non-zero exit code. Returns null when none
+ * of the legacy signals is present (a bare "error" with no recorded cause).
+ */
+function deriveLegacyFailureReason(record: Record<string, unknown>): FailureReason | null {
+  const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+
+  const apiError = str(record['apiError'])
+  if (apiError !== null) {
+    return { kind: 'api-failure', message: `Terminal API failure: ${apiError}` }
+  }
+
+  if (record['loopDetected'] === true) {
+    const confidence = typeof record['loopConfidence'] === 'number' ? record['loopConfidence'] : null
+    const reason = str(record['loopReason'])
+    const confidencePart = confidence !== null ? ` (confidence ${confidence})` : ''
+    const reasonPart = reason !== null ? ` — ${reason}` : ''
+    return { kind: 'loop-detected', message: `Loop defect detected${confidencePart}${reasonPart}` }
+  }
+
+  const invocations = Array.isArray(record['invocations']) ? record['invocations'] : []
+  for (const inv of invocations) {
+    if (typeof inv !== 'object' || inv === null) continue
+    const r = inv as Record<string, unknown>
+    if (r['evaluation'] !== true) continue
+    if (r['verdict'] === 'complete') continue
+    const ticket = typeof r['ticket'] === 'number' ? r['ticket'] : null
+    const title = str(r['ticketTitle'])
+    const which = ticket !== null
+      ? `ticket ${ticket}${title !== null ? ` (${title})` : ''}`
+      : 'the run'
+    const reason = r['verdict'] === 'incomplete'
+      ? 'was judged INCOMPLETE by its evaluation'
+      : 'ended with no parseable verdict (treated as INCOMPLETE)'
+    return { kind: 'incomplete', message: `${which} ${reason}` }
+  }
+
+  if (record['maxTurnsExceeded'] === true) {
+    return { kind: 'max-turns', message: 'The run was killed for exceeding the max turn limit' }
+  }
+
+  const exitCode = record['exitCode']
+  if (typeof exitCode === 'number' && exitCode !== 0) {
+    return { kind: 'exit-code', message: `The run exited with code ${exitCode}` }
+  }
+
+  return null
 }
 
 /**

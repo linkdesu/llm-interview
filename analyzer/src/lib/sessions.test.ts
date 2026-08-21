@@ -146,6 +146,67 @@ describe('listSessionRuns', () => {
       cleanup()
     }
   })
+  it('rebuilds a legacy api-failure reason for an error run without failureReason', () => {
+    const { root, cleanup } = makeArchive()
+    try {
+      writeFileSync(
+        path.join(root, runJsonFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801')),
+        JSON.stringify({ status: 'error', apiError: '500: upstream error: do request failed' }),
+      )
+      const runs = listSessionRuns(root)
+      const legacy = runs.find((r) => r.datetime === '20260728-032801')
+      expect(legacy?.status).toBe('error')
+      expect(legacy?.failureReason).toEqual({
+        kind: 'api-failure',
+        message: 'Terminal API failure: 500: upstream error: do request failed',
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('rebuilds a legacy max-turns reason for an error run without failureReason', () => {
+    const { root, cleanup } = makeArchive()
+    try {
+      writeFileSync(
+        path.join(root, runJsonFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707')),
+        JSON.stringify({ status: 'error', maxTurnsExceeded: true }),
+      )
+      const runs = listSessionRuns(root)
+      const legacy = runs.find((r) => r.datetime === '20260728-025707')
+      expect(legacy?.failureReason).toEqual({
+        kind: 'max-turns',
+        message: 'The run was killed for exceeding the max turn limit',
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('rebuilds a legacy incomplete reason from an evaluation verdict', () => {
+    const { root, cleanup } = makeArchive()
+    try {
+      writeFileSync(
+        path.join(root, runJsonFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239')),
+        JSON.stringify({
+          status: 'error',
+          invocations: [
+            { ticket: 1, evaluation: true, verdict: 'complete' },
+            { ticket: 2, ticketTitle: 'Wallpaper', evaluation: true, verdict: 'incomplete' },
+          ],
+        }),
+      )
+      const runs = listSessionRuns(root)
+      const legacy = runs.find((r) => r.datetime === '20260728-024239')
+      expect(legacy?.failureReason).toEqual({
+        kind: 'incomplete',
+        message: 'ticket 2 (Wallpaper) was judged INCOMPLETE by its evaluation',
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
 
   it('returns an empty list for an empty root', () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'analyzer-sessions-'))
