@@ -93,25 +93,27 @@ export function ComboCard({ combo }: { combo: ComboEntry }) {
       {combo.files.artifact ? (
         <>
           <iframe
-            className="mt-3 block h-80 w-full rounded-md border border-border bg-white pointer-events-none sm:pointer-events-auto"
+            className="mt-3 block h-60 w-full rounded-md border border-border bg-white pointer-events-none md:pointer-events-auto md:h-80"
             src={combo.files.artifact}
             title={comboLabel(combo)}
             sandbox="allow-scripts allow-same-origin"
           />
-          <p className="mt-1.5 text-xs text-muted-foreground sm:hidden">
+          <p className="mt-1.5 text-xs text-muted-foreground md:hidden">
             Live preview · interactive on desktop
           </p>
         </>
       ) : (
-        <div className="mt-3 flex h-80 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
+        <div className="mt-3 flex h-60 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground md:h-80">
           No artifact for this run
         </div>
       )}
 
+      {/* ADR 0008: below 768px the ⛶ Expand link is hidden; the transcript
+          toggle is the only card action on mobile. */}
       <div className="mt-3 flex gap-4">
         <a
           href={expandHash}
-          className="font-mono text-[11px] uppercase tracking-[0.08em] text-primary underline-offset-2 hover:underline"
+          className="hidden font-mono text-[11px] uppercase tracking-[0.08em] text-primary underline-offset-2 hover:underline md:inline"
         >
           ⛶ Expand
         </a>

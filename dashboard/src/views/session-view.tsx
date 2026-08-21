@@ -151,7 +151,7 @@ function SessionContent({ combo }: { combo: ComboEntry }) {
           </div>
         </div>
 
-        <div className="h-[300px] overflow-hidden border-b border-border">
+        <div className="h-40 overflow-hidden border-b border-border md:h-[300px]">
           {reducedMotion ? (
             <div className="flex h-full items-center justify-center">
               <h1 className="text-3xl font-semibold tracking-tight text-foreground">
@@ -175,8 +175,10 @@ function SessionContent({ combo }: { combo: ComboEntry }) {
         </div>
       </header>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-label="Artifact">
+      <div className="mt-4 flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* ADR 0008: on mobile the session stage is hidden (display: none);
+            the transcript below is the primary content. */}
+        <section aria-label="Artifact" className="hidden md:block">
           {/* allow-same-origin is required: without it the iframe gets an opaque
               origin and <script type="module"> artifacts fail their CORS check.
               The sandbox still blocks top navigation, popups, forms, etc. */}
@@ -218,7 +220,7 @@ function SessionContent({ combo }: { combo: ComboEntry }) {
                 <ParamRow
                   label="Max turns"
                   value={`${combo.maxTurns}${combo.maxTurnsExceeded ? " (exceeded)" : ""}`}
-                  warning={combo.maxTurnsExceeded === true}
+                  warning={combo.maxTurnsExceeded}
                 />
               )}
               {combo.loopDetected && (
@@ -244,36 +246,36 @@ function SessionContent({ combo }: { combo: ComboEntry }) {
             )}
           </section>
         </aside>
+        <section className="order-first rounded-lg border border-border bg-card p-4 md:order-none lg:col-span-2">
+          <h2 className={panelHeading}>
+            Transcript
+            {combo.files.transcript && (
+              <span className="ml-2 font-mono text-[10px] tracking-normal text-muted-foreground normal-case">
+                {combo.files.transcript}
+              </span>
+            )}
+          </h2>
+          {transcript.status === "loading" && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Loading transcript…
+            </p>
+          )}
+          {transcript.status === "missing" && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              No transcript for this run
+            </p>
+          )}
+          {transcript.status === "error" && (
+            <p className="mt-2 text-sm text-destructive">
+              Failed to load transcript: {transcript.message}
+            </p>
+          )}
+          {transcript.status === "loaded" && (
+            <TranscriptTimeline items={transcript.items} />
+          )}
+        </section>
       </div>
 
-      <section className="mt-4 rounded-lg border border-border bg-card p-4">
-        <h2 className={panelHeading}>
-          Transcript
-          {combo.files.transcript && (
-            <span className="ml-2 font-mono text-[10px] tracking-normal text-muted-foreground normal-case">
-              {combo.files.transcript}
-            </span>
-          )}
-        </h2>
-        {transcript.status === "loading" && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Loading transcript…
-          </p>
-        )}
-        {transcript.status === "missing" && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            No transcript for this run
-          </p>
-        )}
-        {transcript.status === "error" && (
-          <p className="mt-2 text-sm text-destructive">
-            Failed to load transcript: {transcript.message}
-          </p>
-        )}
-        {transcript.status === "loaded" && (
-          <TranscriptTimeline items={transcript.items} />
-        )}
-      </section>
 
       <footer className="py-4 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
         sessions/{combo.comboId}/ · status: {combo.status}
