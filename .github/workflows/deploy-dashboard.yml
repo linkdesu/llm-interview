@@ -24,6 +24,7 @@ jobs:
         working-directory: dashboard
         run: tar -czf deploy.tar.gz -C dist .
       - name: Upload to vxServer
+        working-directory: dashboard
         env:
           VXSERVER_DEPLOY_KEY: ${{ secrets.VXSERVER_DEPLOY_KEY }}
         run: |
