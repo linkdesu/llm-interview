@@ -974,6 +974,22 @@ export async function resumeMatrix(
 ): Promise<RunComboOutcome[]> {
   const file = await loadResumeFile(resumeFilePath);
   const concurrency = overrides.concurrency ?? file.concurrency;
+
+  // Surface how to watch the resumed run's live session transcript: the
+  // first in-flight Combo's run dir holds pi's session JSONL files (one per
+  // invocation, appended as turns complete), so a tail -f glob follows the
+  // current ticket in real time. Emitted on both channels (console + index
+  // log) via log(). When nothing was mid-flight, point at the temp root so
+  // the operator knows where the next Combo's files will appear.
+  const liveRunDir = file.remaining.find((c) => c.inFlight)?.inFlight?.runDir;
+  if (liveRunDir) {
+    log(`live session log: tail -f ${join(liveRunDir, "sessions", "*.jsonl")}`);
+  } else {
+    log(
+      `live session log: tail -f ${join(tmpdir(), "llm-interview-runs", "pi-run-*", "sessions", "*.jsonl")} (once the first Combo starts)`
+    );
+  }
+
   return runMatrix({
     ...options,
     questionFilter: file.questionFilter,
