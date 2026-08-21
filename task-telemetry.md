@@ -63,3 +63,15 @@ Sub-agent context telemetry for the llm-interview repo, recorded per wave per th
 - 失控点不是读代码而是**逛 React Bits 文档站 + 反复重试 registry add**（animated-list 400 / depth-card 404）——外部文档页单页 40KB+，是最贵的探索材料。5 分钟监控在 36 调用 0 写入时介入 steering，agent 立即回归写作并 13 分钟内完成。
 - 校准新增：① 派发时若要用 registry 组件，**编排者预验证组件名可用性**并把确切 item 名写进 prompt（如 `@reactbits-starter/blinking-squares-tw`），禁止 agent 自行浏览选型；② 监控规则「10 分钟无写入即介入」有效。
 - Registry 事实：`@reactbits-pro` 命名空间服务 blocks/templates（pricing-1 等），单组件多在 `@reactbits-starter` 且带 `-tw`/`-css` 后缀；pro 站的组件目录 ≠ starter registry 内容。
+
+## 2026-08-22 Wave 6 — #36 Session view / #37 Mobile degrade（task agent = qwen-27b-latest thinking）
+
+| task | 模型 | 任务范围 | 结果 | 失败模式 | context 峰值 | compaction | 耗时 |
+|---|---|---|---|---|---|---|---|
+| SessionView | new-api-think/qwen-27b-latest | #36：session 视图单文件重写 | 成功（一次通过） | — | ~38k | 0 | 10m15s |
+| MobileDegrade | new-api-think/qwen-27b-latest | #37：3 文件移动端门控 | 成功（需 1 次收尾催促） | 轻微：写完后反复重读自己的文件 | ~41k | 0 | 27m17s |
+
+### 备注
+- SessionView 是最顺的一票：禁文档浏览 + 组件全部预装 + 行为参考精确到文件，一次通过。
+- MobileDegrade 写完 4 个 edit 后进入"重读自己文件确认"的慢循环（10 分钟无写入），hub 催促后立即收尾验证并交付。**监控规则修订：无写入 10 分钟即催促，催促有效则无需取消重派**。
+- #38（部署切换）由编排者直接执行（gitops 类操作不适合小模型）：CI 修复一处 working-directory 丢失后构建/上传成功，但 vxserver 域名未切换到新版本（v7/v8 均上传成功、active_version 已更新，域名仍服务旧内容）——平台侧问题，留人工处理。
