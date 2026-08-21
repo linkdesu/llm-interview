@@ -12,6 +12,13 @@ interface SessionRun {
   datetime: string
   sessionJsonl: string | null
   artifactHtml: string | null
+  status: string | null
+  failureReason: FailureReason | null
+}
+
+interface FailureReason {
+  kind: string
+  message: string
 }
 
 interface ModelNode {
@@ -100,6 +107,20 @@ function isSelected(question: string, model: string, datetime: string): boolean 
 function hasArtifact(question: string, model: string, datetime: string): boolean {
   const run = runsByKey.value.get(runKey(question, model, datetime))
   return run !== undefined && run.artifactHtml !== null
+}
+
+/** True when the run finished with an error status (failure badge shown). */
+function hasError(question: string, model: string, datetime: string): boolean {
+  const run = runsByKey.value.get(runKey(question, model, datetime))
+  return run !== undefined && run.status === 'error'
+}
+
+/** Tooltip for a run's failure badge: the failure reason message, or a
+ *  generic "error" when run.json carried no structured reason. */
+function failureTitle(question: string, model: string, datetime: string): string {
+  const run = runsByKey.value.get(runKey(question, model, datetime))
+  if (run === undefined || run.failureReason === null) return 'error'
+  return run.failureReason.message
 }
 
 /** Open a run's Artifact HTML in a new tab (served by the Bun server). */
@@ -214,6 +235,11 @@ async function selectRun(question: string, model: string, datetime: string) {
                     >
                       {{ datetime }}
                     </button>
+                    <span
+                      v-if="hasError(group.question, model.model, datetime)"
+                      class="leaf-error-badge"
+                      :title="failureTitle(group.question, model.model, datetime)"
+                    >⚠</span>
                     <button
                       v-if="hasArtifact(group.question, model.model, datetime)"
                       type="button"
@@ -259,6 +285,11 @@ async function selectRun(question: string, model: string, datetime: string) {
                     >
                       {{ datetime }}
                     </button>
+                    <span
+                      v-if="hasError(question.question, group.model, datetime)"
+                      class="leaf-error-badge"
+                      :title="failureTitle(question.question, group.model, datetime)"
+                    >⚠</span>
                     <button
                       v-if="hasArtifact(question.question, group.model, datetime)"
                       type="button"

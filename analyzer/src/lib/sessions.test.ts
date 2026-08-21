@@ -53,6 +53,9 @@ function jsonlFor(question: string, model: string, datetime: string): string {
 function htmlFor(question: string, model: string, datetime: string): string {
   return path.join(question, model, datetime, 'index.html')
 }
+function runJsonFor(question: string, model: string, datetime: string): string {
+  return path.join(question, model, datetime, 'run.json')
+}
 
 describe('listSessionRuns', () => {
   it('lists every archived run, full history across all combos', () => {
@@ -60,12 +63,12 @@ describe('listSessionRuns', () => {
     try {
       const runs = listSessionRuns(root)
       expect(runs).toEqual([
-        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-024239', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239'), artifactHtml: htmlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239') },
-        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-111111', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-111111'), artifactHtml: htmlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-111111') },
-        { question: 'browser-os', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-045601', sessionJsonl: jsonlFor('browser-os', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-045601'), artifactHtml: htmlFor('browser-os', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-045601') },
-        { question: 'city-time-machine', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-025707', sessionJsonl: jsonlFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707'), artifactHtml: htmlFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707') },
-        { question: 'city-time-machine', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-050326', sessionJsonl: null, artifactHtml: null },
-        { question: 'snake', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-032801', sessionJsonl: jsonlFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801'), artifactHtml: htmlFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801') },
+        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-024239', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239'), artifactHtml: htmlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239'), status: null, failureReason: null },
+        { question: 'browser-os', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-111111', sessionJsonl: jsonlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-111111'), artifactHtml: htmlFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-111111'), status: null, failureReason: null },
+        { question: 'browser-os', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-045601', sessionJsonl: jsonlFor('browser-os', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-045601'), artifactHtml: htmlFor('browser-os', 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', '20260729-045601'), status: null, failureReason: null },
+        { question: 'city-time-machine', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-025707', sessionJsonl: jsonlFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707'), artifactHtml: htmlFor('city-time-machine', 'Qwen3.6-27B-Q5_K_M', '20260728-025707'), status: null, failureReason: null },
+        { question: 'city-time-machine', model: 'Qwopus3.6-35B-A3B-Coder-Q5_K_M', datetime: '20260729-050326', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
+        { question: 'snake', model: 'Qwen3.6-27B-Q5_K_M', datetime: '20260728-032801', sessionJsonl: jsonlFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801'), artifactHtml: htmlFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801'), status: null, failureReason: null },
       ])
     } finally {
       cleanup()
@@ -88,6 +91,57 @@ describe('listSessionRuns', () => {
     const { root, cleanup } = makeArchive()
     try {
       expect(listSessionRuns(root)).toEqual(listSessionRuns(root))
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('reads status and failureReason from run.json when present', () => {
+    const { root, cleanup } = makeArchive()
+    try {
+      writeFileSync(
+        path.join(root, runJsonFor('browser-os', 'Qwen3.6-27B-Q5_K_M', '20260728-024239')),
+        JSON.stringify({ status: 'error', failureReason: { kind: 'max-turns', message: 'hit the 100-turn limit' } }),
+      )
+      const runs = listSessionRuns(root)
+      const errored = runs.find((r) => r.datetime === '20260728-024239')
+      expect(errored?.status).toBe('error')
+      expect(errored?.failureReason).toEqual({ kind: 'max-turns', message: 'hit the 100-turn limit' })
+      const clean = runs.find((r) => r.datetime === '20260728-111111')
+      expect(clean?.status).toBeNull()
+      expect(clean?.failureReason).toBeNull()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('is lenient with a legacy run.json that has no failureReason', () => {
+    const { root, cleanup } = makeArchive()
+    try {
+      writeFileSync(
+        path.join(root, runJsonFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801')),
+        JSON.stringify({ status: 'ok', exitCode: 0 }),
+      )
+      const runs = listSessionRuns(root)
+      const legacy = runs.find((r) => r.datetime === '20260728-032801')
+      expect(legacy?.status).toBe('ok')
+      expect(legacy?.failureReason).toBeNull()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('does not throw when run.json is corrupt', () => {
+    const { root, cleanup } = makeArchive()
+    try {
+      writeFileSync(
+        path.join(root, runJsonFor('snake', 'Qwen3.6-27B-Q5_K_M', '20260728-032801')),
+        '{ not valid json',
+      )
+      const runs = listSessionRuns(root)
+      const broken = runs.find((r) => r.datetime === '20260728-032801')
+      expect(broken?.status).toBeNull()
+      expect(broken?.failureReason).toBeNull()
     } finally {
       cleanup()
     }
@@ -135,10 +189,10 @@ describe('groupByQuestion', () => {
 
   it('is a pure projection: input order does not affect the tree', () => {
     const runs: SessionRun[] = [
-      { question: 'zeta', model: 'alpha', datetime: '20260101-000002', sessionJsonl: null, artifactHtml: null },
-      { question: 'alpha', model: 'beta', datetime: '20260101-000001', sessionJsonl: null, artifactHtml: null },
-      { question: 'zeta', model: 'alpha', datetime: '20260101-000003', sessionJsonl: null, artifactHtml: null },
-      { question: 'alpha', model: 'alpha', datetime: '20260101-000004', sessionJsonl: null, artifactHtml: null },
+      { question: 'zeta', model: 'alpha', datetime: '20260101-000002', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
+      { question: 'alpha', model: 'beta', datetime: '20260101-000001', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
+      { question: 'zeta', model: 'alpha', datetime: '20260101-000003', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
+      { question: 'alpha', model: 'alpha', datetime: '20260101-000004', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
     ]
     const shuffled = [...runs].reverse()
     expect(groupByQuestion(runs)).toEqual(groupByQuestion(shuffled))
@@ -187,9 +241,9 @@ describe('groupByModel', () => {
 
   it('is a pure projection: input order does not affect the tree', () => {
     const runs: SessionRun[] = [
-      { question: 'q1', model: 'm2', datetime: '20260101-000001', sessionJsonl: null, artifactHtml: null },
-      { question: 'q2', model: 'm1', datetime: '20260101-000002', sessionJsonl: null, artifactHtml: null },
-      { question: 'q1', model: 'm1', datetime: '20260101-000003', sessionJsonl: null, artifactHtml: null },
+      { question: 'q1', model: 'm2', datetime: '20260101-000001', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
+      { question: 'q2', model: 'm1', datetime: '20260101-000002', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
+      { question: 'q1', model: 'm1', datetime: '20260101-000003', sessionJsonl: null, artifactHtml: null, status: null, failureReason: null },
     ]
     expect(groupByModel([...runs].reverse())).toEqual([
       {

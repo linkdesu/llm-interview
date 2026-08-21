@@ -383,6 +383,17 @@ body {
   border-color: var(--hairline-strong);
   background: var(--hover);
 }
+/* Failure badge: flags an error-status run so a broken run is visible in the
+   sidebar tree. Hover tooltip carries the run.json failure reason. */
+.leaf-error-badge {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--error);
+  cursor: help;
+  user-select: none;
+}
 
 .leaf-select:focus-visible,
 .leaf-view:focus-visible {

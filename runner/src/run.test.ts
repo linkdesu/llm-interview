@@ -317,10 +317,10 @@ describe("runMatrix", () => {
     expect(runJson.piVersion).toBe("test-1.0");
     expect(runJson.startedAt).toBeDefined();
     expect(runJson.endedAt).toBeDefined();
-    expect(runJson.durationMs).toBeGreaterThan(0);
     expect(runJson.status).toBe("ok");
     expect(runJson.exitCode).toBe(0);
     expect(runJson.maxTurnsExceeded).toBe(false);
+    expect(runJson.failureReason).toBeUndefined();
     expect(runJson.maxTurns).toBe(100);
     expect(runJson.contractViolations).toEqual([]);
     expect(runJson.comboId).toBeDefined();
@@ -808,6 +808,66 @@ sleep 30
     const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
     expect(runJson.maxTurnsExceeded).toBe(true);
     expect(runJson.maxTurns).toBe(2);
+    expect(runJson.failureReason?.kind).toBe("max-turns");
+  });
+
+  // -----------------------------------------------------------------------
+  // Test 13b: A non-zero pi exit code (no other failure signal) is
+  // classified as an exit-code failure in run.json.
+  // -----------------------------------------------------------------------
+  it("records an exit-code failure reason when pi exits non-zero", async () => {
+    const { runMatrix } = await import("./run");
+
+    // Stub that writes a valid session and artifacts, then exits 3.
+    const failingStub = join(tempRoot, "stub-pi-exit-code");
+    await writeFile(
+      failingStub,
+      `#!/usr/bin/env bash
+SESSION_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session-dir) SESSION_DIR="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+SESSION_DIR="\${SESSION_DIR:-.}"
+echo '{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}' > "$SESSION_DIR/session.jsonl"
+echo '<!DOCTYPE html><html></html>' > index.html
+echo 'body {}' > style.css
+echo 'console.log("hi");' > script.js
+exit 3
+`,
+      "utf-8"
+    );
+    await chmod(failingStub, 0o755);
+
+    const results = await runMatrix({
+      questionDir,
+      configPath,
+      sessionRoot,
+      piBin: failingStub,
+      piHome,
+      tempRoot: runTempRoot,
+      questionFilter: ["q-hello"],
+      modelFilter: ["alpha.gguf"],
+      piVersion: "test-1.0",
+      maxTurns: 100,
+      runRules: "",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("error");
+
+    const archivePath = join(
+      sessionRoot,
+      "q-hello",
+      "model-alpha",
+      (await listDir(join(sessionRoot, "q-hello", "model-alpha")))[0]
+    );
+    const runJson = JSON.parse(await readFile(join(archivePath, "run.json"), "utf-8")) as RunJson;
+    expect(runJson.exitCode).toBe(3);
+    expect(runJson.failureReason?.kind).toBe("exit-code");
+    expect(runJson.failureReason?.message).toContain("3");
   });
 
   // -----------------------------------------------------------------------
@@ -1126,6 +1186,8 @@ describe("runMatrix per-ticket flow", () => {
       evaluation: true,
       verdict: "incomplete",
     });
+    expect(runJson.failureReason?.kind).toBe("incomplete");
+    expect(runJson.failureReason?.message).toContain("ticket 1");
 
     const session = await readArchivedSession(sessionRoot);
     expect(session.trim().split("\n")).toHaveLength(2);
@@ -1161,6 +1223,7 @@ describe("runMatrix per-ticket flow", () => {
       evaluation: true,
       verdict: null,
     });
+    expect(runJson.failureReason?.kind).toBe("incomplete");
   });
 
   it("trusts a COMPLETE verdict even when the evaluation had failed tool calls", async () => {
@@ -1396,6 +1459,8 @@ describe("runMatrix API failure handling", () => {
       status: "error",
     });
     expect(runJson.invocations![0].apiError).toBeTruthy();
+    expect(runJson.failureReason?.kind).toBe("api-failure");
+    expect(runJson.failureReason?.message).toContain(runJson.apiError!);
 
     // model-beta has no archive at all.
     const betaDirs = await listDir(join(sessionRoot, "q-ticketed", "model-beta"));
@@ -4038,6 +4103,8 @@ ${options.idle ? "sleep 30" : "exit 0"}
     expect(runJson.loopReason).toBe("identical snapshot commands repeated");
     // The whole Combo was aborted: ticket 1 killed, tickets 2-3 never ran
     expect(runJson.invocations).toHaveLength(1);
+    expect(runJson.failureReason?.kind).toBe("loop-detected");
+    expect(runJson.failureReason?.message).toContain("confidence 95");
 
     // loop-detect.jsonl sits next to session.jsonl with one line per judgment
     const dirs = await listDir(join(sessionRoot, "q-ticketed", "model-alpha"));

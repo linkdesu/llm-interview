@@ -6,7 +6,7 @@
 // This module is server-only because it reads the filesystem: it is excluded
 // from the browser tsconfig, imported by the Bun server, and unit-tested under
 // vitest with temp-dir fixtures.
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import * as path from 'node:path'
 
 /** One archived Run: a <datetime> directory under the session archive. */
@@ -20,6 +20,20 @@ export interface SessionRun {
   /** Path of the Artifact's index.html relative to the archive root, or null
    *  when the run directory has no index.html. */
   artifactHtml: string | null
+  /** Terminal status from run.json ("ok" or "error"), or null when the run
+   *  has no run.json or the file is unreadable (older archives). */
+  status: string | null
+  /** Structured failure reason from run.json, or null when the field is
+   *  absent (ok runs, older archives) or run.json is unreadable. */
+  failureReason: FailureReason | null
+}
+
+/** Structured failure reason recorded in run.json for error runs. `kind` is
+ *  the stable, append-only vocabulary written by the runner; `message` is
+ *  the operator-facing explanation. Mirrors the runner's RunJson contract. */
+export interface FailureReason {
+  kind: string
+  message: string
 }
 
 /** A model under a question, with its run datetimes sorted. */
@@ -52,6 +66,43 @@ function isVisibleDirectory(dir: string, entry: string): boolean {
 }
 
 /**
+ * Terminal status and failure reason for one run, read from its run.json.
+ * Lenient by design: a missing, truncated, or unparseable run.json yields
+ * nulls rather than an error, so legacy archives keep listing. The failure
+ * reason is only surfaced when both `kind` and `message` are non-empty
+ * strings — anything else (absent, malformed, empty) degrades to null.
+ */
+function readRunMeta(runDir: string): { status: string | null; failureReason: FailureReason | null } {
+  const fallback = { status: null, failureReason: null }
+  let raw: string
+  try {
+    if (!existsSync(path.join(runDir, 'run.json'))) return fallback
+    raw = readFileSync(path.join(runDir, 'run.json'), 'utf8')
+  } catch {
+    return fallback
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+  if (typeof parsed !== 'object' || parsed === null) return fallback
+  const record = parsed as Record<string, unknown>
+  const status = typeof record['status'] === 'string' ? record['status'] : null
+  const rawReason = record['failureReason']
+  let failureReason: FailureReason | null = null
+  if (typeof rawReason === 'object' && rawReason !== null) {
+    const reason = rawReason as Record<string, unknown>
+    if (typeof reason['kind'] === 'string' && reason['kind'] !== ''
+      && typeof reason['message'] === 'string' && reason['message'] !== '') {
+      failureReason = { kind: reason['kind'], message: reason['message'] }
+    }
+  }
+  return { status, failureReason }
+}
+
+/**
  * Walk a session archive root and return one flat entry per archived run —
  * every <datetime> directory, full history, not just the latest per combo.
  * Each level is visited in sorted order so the flat list is deterministic.
@@ -71,6 +122,7 @@ export function listSessionRuns(root: string): SessionRun[] {
         if (!isVisibleDirectory(modelDir, datetime)) continue
         const relativeJsonl = path.join(question, model, datetime, 'session.jsonl')
         const relativeHtml = path.join(question, model, datetime, 'index.html')
+        const { status, failureReason } = readRunMeta(runDir)
         runs.push({
           question,
           model,
@@ -81,6 +133,8 @@ export function listSessionRuns(root: string): SessionRun[] {
           artifactHtml: existsSync(path.join(runDir, 'index.html'))
             ? relativeHtml
             : null,
+          status,
+          failureReason,
         })
       }
     }

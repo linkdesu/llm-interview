@@ -354,7 +354,107 @@ export interface RunJson {
    * immediately and waits for manual recovery instead of burning combos.
    */
   apiError?: string;
+  /**
+   * Structured failure-reason summary for error runs, or undefined for
+   * ok runs. `kind` is a stable enumerable classification the Analyzer
+   * UI can render/color; `message` is a human-readable explanation of
+   * why the run failed, aimed at an operator deciding whether to re-run
+   * the combo. Older run.json files predate this field.
+   */
+  failureReason?: FailureReason;
 }
+
+/**
+ * A single run's failure, classified for the Analyzer UI. `kind` is the
+ * stable, documented vocabulary; `message` is the operator-facing
+ * explanation (not raw field concatenation).
+ */
+export interface FailureReason {
+  kind: FailureKind;
+  message: string;
+}
+
+/**
+ * Stable failure vocabulary. The Analyzer colors/renders these; the
+ * set is append-only so old archives remain interpretable.
+ */
+export type FailureKind =
+  | "api-failure"
+  | "incomplete"
+  | "loop-detected"
+  | "max-turns"
+  | "crash"
+  | "exit-code";
+/**
+ * Classify a finished run's terminal failure signals into the structured
+ * `failureReason` recorded in run.json, or undefined when there is nothing
+ * to classify (ok runs, or errors without a recognized cause).
+ *
+ * Priority is fixed and first-match-wins: terminal API failure beats
+ * everything (an infrastructure death says nothing about the model's
+ * work), then a loop defect, then an incomplete verdict, then the max
+ * turn kill, then a non-zero exit code. The "crash" kind is deliberately
+ * NOT produced here — the crash path never reaches the run.json write.
+ */
+export function deriveFailureReason(args: {
+  status: "ok" | "error";
+  apiError?: string;
+  loopDetected: boolean;
+  loopConfidence?: number;
+  loopReason?: string;
+  maxTurnsExceeded: boolean;
+  exitCode: number | null;
+  invocations: InvocationRecord[];
+}): FailureReason | undefined {
+  const { status, apiError, loopDetected, loopConfidence, loopReason, maxTurnsExceeded, exitCode, invocations } = args;
+  if (status !== "error") return undefined;
+
+  if (apiError) {
+    return { kind: "api-failure", message: `Terminal API failure: ${apiError}` };
+  }
+
+  if (loopDetected) {
+    const confidencePart =
+      loopConfidence !== undefined ? ` (confidence ${loopConfidence})` : "";
+    const reasonPart = loopReason ? ` — ${loopReason}` : "";
+    return {
+      kind: "loop-detected",
+      message: `Loop defect detected${confidencePart}${reasonPart}`,
+    };
+  }
+
+  const failingEval = invocations.find(
+    (r) => r.evaluation && r.verdict !== "complete"
+  );
+  if (failingEval) {
+    const which =
+      failingEval.ticket !== undefined
+        ? `ticket ${failingEval.ticket}${failingEval.ticketTitle ? ` (${failingEval.ticketTitle})` : ""}`
+        : "the run";
+    const reason =
+      failingEval.verdict === "incomplete"
+        ? "was judged INCOMPLETE by its evaluation"
+        : "ended with no parseable verdict (treated as INCOMPLETE)";
+    return { kind: "incomplete", message: `${which} ${reason}` };
+  }
+
+  if (maxTurnsExceeded) {
+    return {
+      kind: "max-turns",
+      message: "The run was killed for exceeding the max turn limit",
+    };
+  }
+
+  if (exitCode !== null && exitCode !== 0) {
+    return {
+      kind: "exit-code",
+      message: `The run exited with code ${exitCode}`,
+    };
+  }
+
+  return undefined;
+}
+
 
 /**
  * Format a timestamp as YYYYMMDD-HHmmss using local time.
@@ -1534,6 +1634,16 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       contractViolations,
       invocations: perTicket ? invocations : undefined,
       apiError,
+      failureReason: deriveFailureReason({
+        status,
+        apiError,
+        loopDetected,
+        loopConfidence,
+        loopReason,
+        maxTurnsExceeded,
+        exitCode,
+        invocations,
+      }),
     };
 
     await writeFile(
