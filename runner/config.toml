@@ -19,20 +19,6 @@ spec_type = "draft-mtp"
 spec_draft_n_max = 2
 
 [[models]]
-name = "Qwen3.6-27B-Q5_K_M"
-provider = "llamacpp-local"
-modelId = "qwen3.6-27b-q5"
-notes = ""
-[models.params]
-thinking = "on"
-temp = 0.6
-top_k = 20
-top_p = 0.95
-repeat_penalty = 1.0
-spec_type = "draft-mtp"
-spec_draft_n_max = 2
-
-[[models]]
 name = "Qwopus3.6-35B-A3B-v1-MTP-Q5_K_M"
 provider = "llamacpp-local"
 modelId = "qwopus3.6-35b-a3b-q5"
@@ -61,3 +47,55 @@ top_p = 0.95
 repeat_penalty = 1.0
 spec_type = "draft-mtp"
 spec_draft_n_max = 2
+
+[[models]]
+name = "Ornith-1.0-35B"
+provider = "idealsoft"
+modelId = "ai-01/ornith-1.0-35b"
+notes = ""
+[models.params]
+thinking = "on"
+temp = 0.6
+top_k = 20
+top_p = 0.95
+repeat_penalty = 1.0
+
+[[models]]
+name = "Qwen3.8-27B-Q4_K_XL"
+provider = "idealsoft"
+modelId = "gamepc/qwen3.8-27b"
+notes = "sampling: temp=1.0 top_p=0.95 top_k=20 min_p=0 presence_penalty=0 repetition_penalty=1 context=131072; thinking off (gamepc server hangs on chat_template_kwargs)"
+[models.params]
+thinking = "off"
+temp = 1.0
+top_p = 0.95
+top_k = 20
+min_p = 0.0
+presence_penalty = 0.0
+repeat_penalty = 1.0
+
+[[models]]
+name = "Ornith-1.5-35B-A3B-oQ4e-mtp"
+provider = "idealsoft"
+modelId = "ai-01/ornith-1.5-35b"
+notes = "probed 2026-08-21: no reasoning_content even with enable_thinking=true; thinking off. sampling params follow Ornith-1.0-35B family until server config confirmed"
+[models.params]
+thinking = "off"
+temp = 0.6
+top_k = 20
+top_p = 0.95
+repeat_penalty = 1.0
+
+[[models]]
+name = "Qwen3.8-27B-oQ4e-mtp"
+provider = "idealsoft"
+modelId = "ai-01/qwen3.8-27b-4"
+notes = "probed 2026-08-21: reasoning_content present by default; thinking on. sampling params follow Qwen3.8-27B-Q4_K_XL family until server config confirmed"
+[models.params]
+thinking = "on"
+temp = 1.0
+top_p = 0.95
+top_k = 20
+min_p = 0.0
+presence_penalty = 0.0
+repeat_penalty = 1.0

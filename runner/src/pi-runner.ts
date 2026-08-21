@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import {
   mkdir,
   writeFile,
@@ -9,8 +9,9 @@ import {
   stat,
   symlink,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { runLog } from "./run-log";
 import { formatToolCall, type LoopDetector } from "./loop-detector";
 import type { Question } from "./question";
@@ -21,6 +22,42 @@ import type { Question } from "./question";
 const log = (msg: string) => {
   runLog(`[pi] ${msg}`);
 };
+
+/**
+ * Locate a globally installed chrome-devtools-mcp build so the interviewed
+ * model's chrome-devtools-axi can spawn the bridge directly via
+ * CHROME_DEVTOOLS_AXI_MCP_PATH — skipping the npx bootstrap (faster, and
+ * independent of the npm cache, which a restricted run sandbox may deny).
+ * Mirrors chrome-devtools-axi's own detectGlobalMcpPath probe. Cached after
+ * the first call; null when no usable global build exists (npx fallback).
+ */
+let cachedMcpPath: string | null | undefined;
+function globalChromeDevToolsMcpPath(): string | null {
+  if (cachedMcpPath !== undefined) return cachedMcpPath;
+  try {
+    const prefix = execFileSync("npm", ["prefix", "-g"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    const candidate = join(
+      prefix,
+      "lib",
+      "node_modules",
+      "chrome-devtools-mcp",
+      "build",
+      "src",
+      "bin",
+      "chrome-devtools-mcp.js"
+    );
+    cachedMcpPath = existsSync(candidate) ? candidate : null;
+  } catch {
+    cachedMcpPath = null;
+  }
+  if (cachedMcpPath) {
+    log(`chrome-devtools-mcp global build: ${cachedMcpPath}`);
+  }
+  return cachedMcpPath;
+}
 
 /**
  * Per-invocation mutable state. Local to runInvocation (never module
@@ -434,10 +471,19 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     prompt,
   ];
 
-  // Spawn pi with the isolated workdir as cwd
+  // Spawn pi with the isolated workdir as cwd. The interviewed model's own
+  // chrome-devtools-axi usage is pinned to a working browser-automation
+  // environment (2026-08 Chrome Canary runner experiments): the Canary
+  // channel, a direct global chrome-devtools-mcp path when available (skips
+  // the npx bootstrap — faster and independent of the npm cache), and an npm
+  // cache in the writable temp area so npx never depends on ~/.npm*.
+  const mcpPath = globalChromeDevToolsMcpPath();
   const env = {
     ...process.env,
     PI_CODING_AGENT_DIR: resolve(piHome),
+    CHROME_DEVTOOLS_AXI_CHANNEL: "canary",
+    ...(mcpPath !== null ? { CHROME_DEVTOOLS_AXI_MCP_PATH: mcpPath } : {}),
+    npm_config_cache: join(tmpdir(), "llm-interview-npm-cache"),
   };
 
   const truncatedArgs = args.map((a) =>
