@@ -80,6 +80,15 @@ export function HomeView({ manifest }: { manifest: Manifest }) {
             // dpr={2}
           />
         </div>
+        {/* Static clearing aligned with the field's own top-anchored
+            fade: lifts the title/typewriter out of the dense band
+            without touching the canvas params. Alpha stays partial at
+            the top so the field still reads as texture behind the
+            text. */}
+        <div
+          aria-hidden
+          className="absolute inset-0 [background:linear-gradient(to_bottom,color-mix(in_srgb,var(--background)_88%,transparent)_0%,color-mix(in_srgb,var(--background)_55%,transparent)_28%,transparent_62%)]"
+        />
         <motion.div
           variants={HERO_CONTAINER}
           initial={reduced ? false : "hidden"}

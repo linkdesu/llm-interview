@@ -5,14 +5,15 @@ const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 /**
  * Cycling wordmark styles — the hero-20 "Trusted by" row, project-flavored:
  * the names are the actual models that have run, so each gets one of a few
- * typographic voices (serif-free: Geist only, weight/tracking variants).
- * Kept at module level so prop identity is stable across renders.
+ * typographic voices (Geist only, size/weight variants). Letter-spacing is
+ * deliberately uniform — per-item tracking would leak into the flex gap
+ * and make the spacing read uneven.
  */
 const MARK_STYLES = [
-  "text-base font-semibold tracking-[0.2em]",
+  "text-base font-semibold tracking-tight",
   "font-mono text-base tracking-tight",
   "text-lg font-medium tracking-tight",
-  "text-base font-medium tracking-widest",
+  "text-base font-medium tracking-tight",
 ] as const;
 
 const group: Variants = {
