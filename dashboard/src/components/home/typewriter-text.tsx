@@ -43,7 +43,7 @@ export function TypewriterText({ phrases }: { phrases: string[] }) {
   return (
     <p aria-label={phrase} className="text-base text-muted-foreground sm:text-lg">
       <span aria-hidden>{phrase.slice(0, count)}</span>
-      <span aria-hidden className="animate-pulse text-foreground">▍</span>
+      <span aria-hidden className="animate-caret-blink text-primary">▍</span>
     </p>
   );
 }
