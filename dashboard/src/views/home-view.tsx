@@ -95,7 +95,7 @@ export function HomeView({ manifest }: { manifest: Manifest }) {
           </motion.h1>
           <motion.div
             variants={ITEM}
-            className="min-h-[4.5rem] max-w-2xl rounded-2xl bg-background/70 px-6 py-3"
+            className="flex min-h-[7.5rem] max-w-2xl items-center rounded-2xl bg-background/70 px-6 py-3"
           >
             <TypewriterText phrases={[...LEDES]} />
           </motion.div>
