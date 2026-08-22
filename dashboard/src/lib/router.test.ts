@@ -16,6 +16,11 @@ describe('parseHash', () => {
     expect(parseHash('#/s/4144dda9648a')).toEqual({ name: 'session', comboId: '4144dda9648a' })
   })
 
+  it('parses the questions and runs hub routes', () => {
+    expect(parseHash('#/questions')).toEqual({ name: 'questions' })
+    expect(parseHash('#/runs')).toEqual({ name: 'runs' })
+  })
+
   it('decodes URI-encoded segments', () => {
     expect(parseHash('#/q/my%20question')).toEqual({ name: 'question', question: 'my question' })
   })
@@ -32,6 +37,8 @@ describe('routeHash', () => {
     expect(routeHash({ name: 'home' })).toBe('#/')
     expect(routeHash({ name: 'question', question: 'snake' })).toBe('#/q/snake')
     expect(routeHash({ name: 'session', comboId: 'abc123' })).toBe('#/s/abc123')
+    expect(routeHash({ name: 'questions' })).toBe('#/questions')
+    expect(routeHash({ name: 'runs' })).toBe('#/runs')
   })
 
   it('encodes segments that contain reserved characters', () => {

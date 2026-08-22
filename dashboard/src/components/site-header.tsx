@@ -10,24 +10,23 @@ import { ArrowUpRight, Menu, Moon, Sun, X } from "lucide-react";
 
 import { useTheme } from "@/components/use-theme";
 import { useRoute } from "@/hooks/use-route";
+import type { Route } from "@/lib/router";
 
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 const focusRing =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const NAV_LINKS = [
+  { label: "Home", hash: "#/" },
+  { label: "Questions", hash: "#/questions" },
+  { label: "Runs", hash: "#/runs" },
+] as const;
 
-function titleCase(question: string): string {
-  return question
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-interface NavLink {
-  label: string;
-  hash: string;
-  /** Matches Route#question; Home is null. */
-  question: string | null;
+function activeLabel(route: Route): string | null {
+  if (route.name === "home") return "Home";
+  if (route.name === "questions" || route.name === "question") return "Questions";
+  if (route.name === "runs" || route.name === "session") return "Runs";
+  return null;
 }
 
 /**
@@ -38,27 +37,15 @@ interface NavLink {
  * mark use --primary (accent blue), hover washes use --accent-soft,
  * borders use --border — no raw neutral-950/white values.
  */
-export function SiteHeader({ questions }: { questions: string[] }) {
+export function SiteHeader() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const shouldReduceMotion = useReducedMotion();
   const route = useRoute();
   const { theme, toggleTheme } = useTheme();
 
-  const links: NavLink[] = [
-    { label: "Home", hash: "#/", question: null },
-    ...questions.map((question): NavLink => ({
-      label: titleCase(question),
-      hash: `#/q/${question}`,
-      question,
-    })),
-  ];
-
-  const activeLabel =
-    route.name === "question"
-      ? (links.find((link) => link.question === route.question)?.label ?? null)
-      : "Home";
-  const current = hovered ?? activeLabel;
+  const active = activeLabel(route);
+  const current = hovered ?? active;
 
   useEffect(() => {
     if (!open) return;
@@ -119,14 +106,14 @@ export function SiteHeader({ questions }: { questions: string[] }) {
             className="hidden items-center gap-8 md:flex"
             onMouseLeave={() => setHovered(null)}
           >
-            {links.map((link) => (
+            {NAV_LINKS.map((link) => (
               <a
                 key={link.hash}
                 href={link.hash}
                 onMouseEnter={() => setHovered(link.label)}
                 onFocus={() => setHovered(link.label)}
                 onBlur={() => setHovered(null)}
-                aria-current={activeLabel === link.label ? "page" : undefined}
+                aria-current={active === link.label ? "page" : undefined}
                 className={`relative rounded-sm py-2 text-sm font-medium transition-colors duration-200 ${focusRing} ${
                   current === link.label
                     ? "text-foreground"
@@ -215,7 +202,7 @@ export function SiteHeader({ questions }: { questions: string[] }) {
                 >
                   Menu
                 </motion.p>
-                {links.map((link) => (
+                {NAV_LINKS.map((link) => (
                   <motion.a
                     key={link.hash}
                     href={link.hash}
@@ -225,7 +212,7 @@ export function SiteHeader({ questions }: { questions: string[] }) {
                   >
                     <span
                       className={`text-2xl font-semibold tracking-tight transition-colors duration-200 group-hover:text-primary ${
-                        activeLabel === link.label ? "text-primary" : "text-foreground"
+                        active === link.label ? "text-primary" : "text-foreground"
                       }`}
                     >
                       {link.label}

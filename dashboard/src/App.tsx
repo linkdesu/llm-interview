@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 
 import { SiteHeader } from "@/components/site-header";
 import { useRoute } from "@/hooks/use-route";
-import { summarizeQuestions } from "@/lib/manifest";
 import type { Manifest } from "@/lib/manifest";
 import { HomeView } from "@/views/home-view";
+import { QuestionsView } from "@/views/questions-view";
 import { QuestionView } from "@/views/question-view";
+import { RunsView } from "@/views/runs-view";
 import { SessionView } from "@/views/session-view";
 
 type ManifestState =
@@ -46,11 +47,6 @@ function App() {
     };
   }, []);
 
-  const headerQuestions =
-    state.status === "loaded"
-      ? summarizeQuestions(state.manifest.combos).map((summary) => summary.name)
-      : [];
-
   let content;
   if (state.status === "loading") {
     content = (
@@ -69,7 +65,11 @@ function App() {
     );
   } else {
     const { manifest } = state;
-    if (route.name === "question") {
+    if (route.name === "questions") {
+      content = <QuestionsView />;
+    } else if (route.name === "runs") {
+      content = <RunsView />;
+    } else if (route.name === "question") {
       const combos = manifest.combos.filter((combo) => combo.question.name === route.question);
       content = <QuestionView question={route.question} combos={combos} />;
     } else if (route.name === "session") {
@@ -82,7 +82,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader questions={headerQuestions} />
+      <SiteHeader />
       <main>{content}</main>
     </div>
   );
