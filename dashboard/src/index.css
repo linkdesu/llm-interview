@@ -62,11 +62,3 @@
     @apply font-sans;
     }
 }
-
-/* ADR 0008 (legacy .stats): on mobile the hero stats collapse to a
-   single column. The dl in stats-row.tsx is the only 2-col dl grid. */
-@media (max-width: 768px) {
-  dl.grid.grid-cols-2 {
-    grid-template-columns: 1fr;
-  }
-}

@@ -1,5 +1,7 @@
 import { useMemo } from "react";
+import { motion, type Variants } from "motion/react";
 import BlinkingSquares from "@/components/react-bits/blinking-squares";
+import { ModelWordmarks } from "@/components/home/model-wordmarks";
 import { QuestionIndex } from "@/components/home/question-index";
 import { StatsRow } from "@/components/home/stats-row";
 import { TypewriterText } from "@/components/home/typewriter-text";
@@ -18,6 +20,35 @@ const LEDES = [
 // Shared by the canvas layer and its overlay so the content block always
 // defines (and fills) the hero height.
 const HERO_HEIGHT = "min(72vh, 640px)";
+
+const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
+/** Hero-20 style entrance: the title blurs in, the rest staggers up. */
+const HEADLINE: Variants = {
+  hidden: { opacity: 0, y: 28, filter: "blur(10px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: 0.8, ease: EASE },
+  },
+};
+
+const HERO_CONTAINER: Variants = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.1, delayChildren: 0.05 },
+  },
+};
+
+const ITEM: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: EASE },
+  },
+};
 
 export function HomeView({ manifest }: { manifest: Manifest }) {
   const reduced = useReducedMotion();
@@ -53,18 +84,28 @@ export function HomeView({ manifest }: { manifest: Manifest }) {
             // dpr={2}
           />
         </div>
-        <div
+        <motion.div
+          variants={HERO_CONTAINER}
+          initial={reduced ? false : "hidden"}
+          animate="show"
           className="relative z-10 flex flex-col items-center justify-center gap-6 px-4 text-center"
           style={{ height: HERO_HEIGHT }}
         >
-          <h1 id="home-title" className="text-5xl font-semibold tracking-tight sm:text-6xl">
+          <motion.h1
+            variants={HEADLINE}
+            id="home-title"
+            className="text-5xl font-semibold tracking-tight sm:text-6xl"
+          >
             LLM Interview
-          </h1>
-          <div className="min-h-[4.5rem] max-w-2xl">
+          </motion.h1>
+          <motion.div variants={ITEM} className="min-h-[4.5rem] max-w-2xl">
             <TypewriterText phrases={[...LEDES]} />
-          </div>
-          <Button onClick={scrollToQuestions}>Browse questions</Button>
-        </div>
+          </motion.div>
+          <motion.div variants={ITEM}>
+            <Button onClick={scrollToQuestions}>Browse questions</Button>
+          </motion.div>
+          <ModelWordmarks names={stats.modelNames} />
+        </motion.div>
       </section>
       <StatsRow stats={stats} />
       <QuestionIndex combos={manifest.combos} />

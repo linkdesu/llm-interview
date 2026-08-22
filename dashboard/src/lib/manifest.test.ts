@@ -76,6 +76,7 @@ describe('summarizeManifest', () => {
     expect(summarizeManifest(fixture)).toEqual({
       questionCount: 2,
       modelCount: 2,
+      modelNames: ['qwen3.6-27b', 'zephyr-7b'],
       sessionCount: 3,
       totalDurationMs: 292713 * 3,
     })
@@ -85,6 +86,7 @@ describe('summarizeManifest', () => {
     expect(summarizeManifest([])).toEqual({
       questionCount: 0,
       modelCount: 0,
+      modelNames: [],
       sessionCount: 0,
       totalDurationMs: 0,
     })

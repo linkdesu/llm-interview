@@ -81,15 +81,21 @@ export interface ManifestStats {
   questionCount: number
   /** Distinct model names across all combos. */
   modelCount: number
+  /** Distinct model names, sorted alphabetically. */
+  modelNames: string[]
   sessionCount: number
   totalDurationMs: number
 }
 
 /** Hero statistics: distinct questions and models, session count, total run time. */
 export function summarizeManifest(combos: ComboEntry[]): ManifestStats {
+  const modelNames = [...new Set(combos.map((combo) => combo.model.name))].sort(
+    (a, b) => a.localeCompare(b),
+  )
   return {
     questionCount: new Set(combos.map((combo) => combo.question.name)).size,
-    modelCount: new Set(combos.map((combo) => combo.model.name)).size,
+    modelCount: modelNames.length,
+    modelNames,
     sessionCount: combos.length,
     totalDurationMs: combos.reduce((sum, combo) => sum + combo.durationMs, 0),
   }
