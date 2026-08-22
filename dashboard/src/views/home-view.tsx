@@ -40,16 +40,17 @@ export function HomeView({ manifest }: { manifest: Manifest }) {
           <BlinkingSquares
             width="100%"
             height="100%"
-            direction="bottom"
+            direction="top"
             gridSize={64}
             squareColor={colors.square}
             backgroundColor={colors.background}
-            squareSize={0.5}
+            squareSize={0.64}
             minBrightness={0.3}
-            twinkleSpeed={reduced ? 0 : 0.9}
-            twinkleStrength={reduced ? 0 : 0.6}
-            fadeStart={0.4}
-            dpr={2}
+            twinkleSpeed={1.4}
+            twinkleStrength={0.94}
+            fadeStart={0.5}
+            fadeEnd={0.8}
+            // dpr={2}
           />
         </div>
         <div
