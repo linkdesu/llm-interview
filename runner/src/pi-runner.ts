@@ -146,7 +146,8 @@ function processJsonEvent(
   // --- Turn lifecycle ---
   if (t === "turn_start") {
     state.turnCount++;
-    if (state.turnCount > state.maxTurns) {
+    // maxTurns of 0 means the limit is disabled (no kill, no flag).
+    if (state.maxTurns > 0 && state.turnCount > state.maxTurns) {
       state.maxTurnsExceeded = true;
     }
     return;
@@ -355,7 +356,7 @@ export interface InvocationOptions {
   piBin: string;
   /** Absolute path for PI_CODING_AGENT_DIR environment variable. */
   piHome: string;
-  /** Maximum assistant turns before the process is killed. */
+  /** Maximum assistant turns before the process is killed; 0 disables the limit. */
   maxTurns: number;
   /**
    * Progress callback fired at each turn end with the count of completed

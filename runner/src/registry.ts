@@ -91,12 +91,13 @@ function validateModels(rawModels: unknown[]): RegistryModel[] {
 
     let maxTurns: number | undefined;
     if (entry.max_turns != null) {
+      // 0 is a valid override: it disables the turn limit for this model.
       if (
         typeof entry.max_turns !== "number" ||
         !Number.isInteger(entry.max_turns) ||
-        entry.max_turns < 1
+        entry.max_turns < 0
       ) {
-        throw new Error(`Invalid entry at ${label}: "max_turns" must be a positive integer`);
+        throw new Error(`Invalid entry at ${label}: "max_turns" must be a non-negative integer (0 = unlimited)`);
       }
       maxTurns = entry.max_turns;
     }

@@ -140,17 +140,36 @@ modelId = "m1"
     }
   });
 
-  it("rejects a non-positive max_turns override", async () => {
+  it("accepts max_turns = 0 as unlimited", async () => {
     const fixture = `
 [[models]]
-name = "bad-model"
+name = "unlimited-model"
 provider = "p1"
 modelId = "m1"
 max_turns = 0
 `;
     const path = createTempFile(fixture);
     try {
-      await expect(loadRegistry(path)).rejects.toThrow('"max_turns" must be a positive integer');
+      const models = await loadRegistry(path);
+      expect(models[0].maxTurns).toBe(0);
+    } finally {
+      cleanup(path);
+    }
+  });
+
+  it("rejects a negative max_turns override", async () => {
+    const fixture = `
+[[models]]
+name = "bad-model"
+provider = "p1"
+modelId = "m1"
+max_turns = -1
+`;
+    const path = createTempFile(fixture);
+    try {
+      await expect(loadRegistry(path)).rejects.toThrow(
+        '"max_turns" must be a non-negative integer (0 = unlimited)'
+      );
     } finally {
       cleanup(path);
     }
