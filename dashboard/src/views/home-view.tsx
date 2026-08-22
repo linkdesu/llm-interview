@@ -80,15 +80,6 @@ export function HomeView({ manifest }: { manifest: Manifest }) {
             // dpr={2}
           />
         </div>
-        {/* Static clearing aligned with the field's own top-anchored
-            fade: lifts the title/typewriter out of the dense band
-            without touching the canvas params. Alpha stays partial at
-            the top so the field still reads as texture behind the
-            text. */}
-        <div
-          aria-hidden
-          className="absolute inset-0 [background:linear-gradient(to_bottom,color-mix(in_srgb,var(--background)_88%,transparent)_0%,color-mix(in_srgb,var(--background)_55%,transparent)_28%,transparent_62%)]"
-        />
         <motion.div
           variants={HERO_CONTAINER}
           initial={reduced ? false : "hidden"}
@@ -98,11 +89,14 @@ export function HomeView({ manifest }: { manifest: Manifest }) {
           <motion.h1
             variants={HEADLINE}
             id="home-title"
-            className="text-5xl font-semibold tracking-tight sm:text-6xl"
+            className="rounded-2xl bg-background/70 px-8 py-3 text-5xl font-semibold tracking-tight sm:text-6xl"
           >
             LLM Interview
           </motion.h1>
-          <motion.div variants={ITEM} className="min-h-[4.5rem] max-w-2xl">
+          <motion.div
+            variants={ITEM}
+            className="min-h-[4.5rem] max-w-2xl rounded-2xl bg-background/70 px-6 py-3"
+          >
             <TypewriterText phrases={[...LEDES]} />
           </motion.div>
           <motion.div variants={ITEM}>
