@@ -78,14 +78,14 @@ repeat_penalty = 1.0
 name = "Ornith-1.5-35B-A3B-oQ4e-mtp"
 provider = "idealsoft"
 modelId = "ai-01/ornith-1.5-35b"
-notes = "probed 2026-08-21: no reasoning_content even with enable_thinking=true; thinking off. sampling params follow Ornith-1.0-35B family until server config confirmed"
+notes = "probed 2026-08-21: reasoning requires chat_template_kwargs.enable_thinking=true (qwen-chat-template). sampling params follow Ornith-1.0-35B family until server config confirmed"
 [models.params]
-thinking = "off"
+thinking = "on"
+thinking_effort = "medium"
 temp = 0.6
 top_k = 20
 top_p = 0.95
 repeat_penalty = 1.0
-
 [[models]]
 name = "Qwen3.8-27B-oQ4e-mtp"
 provider = "idealsoft"
@@ -93,6 +93,7 @@ modelId = "ai-01/qwen3.8-27b-4"
 notes = "probed 2026-08-21: reasoning_content present by default; thinking on. sampling params follow Qwen3.8-27B-Q4_K_XL family until server config confirmed"
 [models.params]
 thinking = "on"
+thinking_effort = "medium"
 temp = 1.0
 top_p = 0.95
 top_k = 20

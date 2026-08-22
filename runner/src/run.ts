@@ -485,6 +485,24 @@ function computeComboId(
 }
 
 /**
+ * Derive the pi --thinking level from a model's params. `thinking` is the
+ * on/off toggle ("on"/"off"); `thinking_effort` is the strength
+ * (off/minimal/low/medium/high/xhigh/max), used only when thinking is on.
+ * Returns undefined when neither param is present, so pi keeps its default.
+ */
+export function deriveThinkingLevel(params: Record<string, string | number | boolean>): string | undefined {
+  const thinking = params.thinking;
+  if (thinking === "off" || thinking === false) return "off";
+  if (thinking === "on" || thinking === true || thinking === undefined) {
+    const effort = params.thinking_effort;
+    if (typeof effort === "string" && effort !== "") return effort;
+    // thinking on without an explicit effort: let pi default (undefined).
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
  * Check the artifact contract: exactly index.html, style.css, script.js.
  * Returns an array of violation messages (empty if compliant).
  */
@@ -1321,12 +1339,6 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
       maxTurnsExceeded = seededRecords.some((r) => r.maxTurnsExceeded);
     }
 
-    /**
-     * Arbitrate a dirty ticket invocation with an evaluation invocation
-     * (ADR 0007). Pushes the evaluation's record and transcript and
-     * returns false when the Combo must stop (terminal API failure or a
-     * verdict other than COMPLETE).
-     */
     const arbitrateDirtyTicket = async (step: Planned): Promise<boolean> => {
       const ticket = step.ticket!;
       const ticketSeg = `ticket ${ticket.index}/${plan.length} · `;
@@ -1341,6 +1353,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         extraArgs: setup!.extraArgs,
         provider: model.provider,
         modelId: model.modelId,
+        thinkingLevel: deriveThinkingLevel(model.params),
         piBin,
         piHome,
         maxTurns: effectiveMaxTurns,
@@ -1465,6 +1478,7 @@ async function runCombo(params: RunComboParams): Promise<RunComboResult> {
         extraArgs: setup.extraArgs,
         provider: model.provider,
         modelId: model.modelId,
+        thinkingLevel: deriveThinkingLevel(model.params),
         piBin,
         piHome,
         maxTurns: effectiveMaxTurns,

@@ -4339,3 +4339,26 @@ ${options.idle ? "sleep 30" : "exit 0"}
     }
   });
 });
+
+describe("deriveThinkingLevel", () => {
+  it("returns the effort when thinking is on and effort is set", async () => {
+    const { deriveThinkingLevel } = await import("./run");
+    expect(deriveThinkingLevel({ thinking: "on", thinking_effort: "medium" })).toBe("medium");
+  });
+
+  it("returns off when thinking is off regardless of effort", async () => {
+    const { deriveThinkingLevel } = await import("./run");
+    expect(deriveThinkingLevel({ thinking: "off", thinking_effort: "high" })).toBe("off");
+    expect(deriveThinkingLevel({ thinking: false })).toBe("off");
+  });
+
+  it("returns undefined when thinking is on without an effort (pi default)", async () => {
+    const { deriveThinkingLevel } = await import("./run");
+    expect(deriveThinkingLevel({ thinking: "on" })).toBeUndefined();
+  });
+
+  it("returns undefined when neither param is present", async () => {
+    const { deriveThinkingLevel } = await import("./run");
+    expect(deriveThinkingLevel({ temp: 0.7 })).toBeUndefined();
+  });
+});

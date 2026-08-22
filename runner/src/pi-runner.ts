@@ -345,6 +345,12 @@ export interface InvocationOptions {
   provider: string;
   /** Model id within that provider. */
   modelId: string;
+  /**
+   * Thinking level passed to pi via --thinking (off/minimal/low/medium/high/
+   * xhigh/max), or undefined to let pi use its default. Derived by the
+   * caller from the model's thinking / thinking_effort params.
+   */
+  thinkingLevel?: string;
   /** Absolute path to the pi executable. */
   piBin: string;
   /** Absolute path for PI_CODING_AGENT_DIR environment variable. */
@@ -438,6 +444,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     extraArgs,
     provider,
     modelId,
+    thinkingLevel,
     piBin,
     piHome,
   } = options;
@@ -462,6 +469,7 @@ export async function runInvocation(options: InvocationOptions): Promise<Invocat
     "--no-prompt-templates",
     "--no-themes",
     "--no-context-files",
+    ...(thinkingLevel !== undefined ? ["--thinking", thinkingLevel] : []),
     `--model`,
     `${provider}/${modelId}`,
     `--session-dir`,
