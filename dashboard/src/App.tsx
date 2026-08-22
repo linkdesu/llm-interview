@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { SiteHeader } from "@/components/site-header";
 import { useRoute } from "@/hooks/use-route";
+import { summarizeQuestions } from "@/lib/manifest";
 import type { Manifest } from "@/lib/manifest";
 import { HomeView } from "@/views/home-view";
 import { QuestionView } from "@/views/question-view";
@@ -45,6 +46,11 @@ function App() {
     };
   }, []);
 
+  const headerQuestions =
+    state.status === "loaded"
+      ? summarizeQuestions(state.manifest.combos).map((summary) => summary.name)
+      : [];
+
   let content;
   if (state.status === "loading") {
     content = (
@@ -76,7 +82,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader />
+      <SiteHeader questions={headerQuestions} />
       <main>{content}</main>
     </div>
   );
