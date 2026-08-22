@@ -14,7 +14,7 @@ export function QuestionIndex({ combos }: { combos: ComboEntry[] }) {
   );
 
   return (
-    <section id="questions" className="mx-auto max-w-5xl px-4 pb-16">
+    <section id="questions" className="mx-auto max-w-5xl px-4 pb-16 pt-12">
       <h2 className="text-xl font-semibold tracking-tight">Questions</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Every question has its own page with all runs side by side.

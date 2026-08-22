@@ -17,10 +17,6 @@ const LEDES = [
   "Compare agent output like for like — identical questions, isolated runs, every artifact rendered side by side.",
 ] as const;
 
-// Shared by the canvas layer and its overlay so the content block always
-// defines (and fills) the hero height.
-const HERO_HEIGHT = "min(72vh, 640px)";
-
 const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 /** Hero-20 style entrance: the title blurs in, the rest staggers up. */
@@ -88,8 +84,7 @@ export function HomeView({ manifest }: { manifest: Manifest }) {
           variants={HERO_CONTAINER}
           initial={reduced ? false : "hidden"}
           animate="show"
-          className="relative z-10 flex flex-col items-center justify-center gap-6 px-4 text-center"
-          style={{ height: HERO_HEIGHT }}
+          className="relative z-10 flex flex-col items-center gap-6 px-4 py-20 text-center sm:py-24"
         >
           <motion.h1
             variants={HEADLINE}
