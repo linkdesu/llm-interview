@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { useRoute } from "@/hooks/use-route";
 import type { Manifest } from "@/lib/manifest";
 import { HomeView } from "@/views/home-view";
+import { NotFoundView } from "@/views/not-found-view";
 import { QuestionsView } from "@/views/questions-view";
 import { QuestionView } from "@/views/question-view";
 import { RunsView } from "@/views/runs-view";
@@ -65,16 +66,27 @@ function App() {
     );
   } else {
     const { manifest } = state;
-    if (route.name === "questions") {
+    if (route.name === "notFound") {
+      content = <NotFoundView path={route.path} />;
+    } else if (route.name === "questions") {
       content = <QuestionsView />;
     } else if (route.name === "runs") {
       content = <RunsView />;
     } else if (route.name === "question") {
       const combos = manifest.combos.filter((combo) => combo.question.name === route.question);
-      content = <QuestionView question={route.question} combos={combos} />;
+      content =
+        combos.length > 0 ? (
+          <QuestionView question={route.question} combos={combos} />
+        ) : (
+          <NotFoundView path={`q/${route.question}`} />
+        );
     } else if (route.name === "session") {
       const combo = manifest.combos.find((entry) => entry.comboId === route.comboId);
-      content = <SessionView combo={combo} />;
+      content = combo ? (
+        <SessionView combo={combo} />
+      ) : (
+        <NotFoundView path={`s/${route.comboId}`} />
+      );
     } else {
       content = <HomeView manifest={manifest} />;
     }

@@ -7,6 +7,7 @@
 //   #/runs              all archived runs, preview page (in progress; placeholder view)
 //   #/q/<question>      question detail (combo comparison grid)
 //   #/s/<comboId>       session fullscreen (artifact + run metadata)
+//   anything else       not-found (radar 404, shows the unknown path)
 
 export type Route =
   | { name: 'home' }
@@ -14,8 +15,13 @@ export type Route =
   | { name: 'runs' }
   | { name: 'question'; question: string }
   | { name: 'session'; comboId: string }
+  | { name: 'notFound'; path: string }
 
-/** Parse a location hash into a Route. Unknown or empty paths fall back to home. */
+/**
+ * Parse a location hash into a Route. Empty or root hashes resolve to home;
+ * unknown or incomplete paths resolve to notFound (with the decoded path
+ * preserved for display).
+ */
 export function parseHash(hash: string): Route {
   const segments = hash
     .replace(/^#/, '')
@@ -26,7 +32,8 @@ export function parseHash(hash: string): Route {
   if (segments[0] === 's' && segments[1]) return { name: 'session', comboId: segments[1] }
   if (segments.length === 1 && segments[0] === 'questions') return { name: 'questions' }
   if (segments.length === 1 && segments[0] === 'runs') return { name: 'runs' }
-  return { name: 'home' }
+  if (segments.length === 0) return { name: 'home' }
+  return { name: 'notFound', path: segments.join('/') }
 }
 
 /** Format a Route as a location hash suitable for href / location.hash. */
@@ -40,6 +47,12 @@ export function routeHash(route: Route): string {
       return '#/questions'
     case 'runs':
       return '#/runs'
+    case 'notFound':
+      return `#/${route.path
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => encodeURIComponent(segment))
+        .join('/')}`
     default:
       return '#/'
   }

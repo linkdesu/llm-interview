@@ -25,10 +25,10 @@ describe('parseHash', () => {
     expect(parseHash('#/q/my%20question')).toEqual({ name: 'question', question: 'my question' })
   })
 
-  it('falls back to home for unknown or incomplete paths', () => {
-    expect(parseHash('#/q')).toEqual({ name: 'home' })
-    expect(parseHash('#/s/')).toEqual({ name: 'home' })
-    expect(parseHash('#/nope/x')).toEqual({ name: 'home' })
+  it('resolves unknown or incomplete paths to notFound with the decoded path', () => {
+    expect(parseHash('#/q')).toEqual({ name: 'notFound', path: 'q' })
+    expect(parseHash('#/nope/x')).toEqual({ name: 'notFound', path: 'nope/x' })
+    expect(parseHash('#/a%20b/c')).toEqual({ name: 'notFound', path: 'a b/c' })
   })
 })
 
@@ -39,6 +39,7 @@ describe('routeHash', () => {
     expect(routeHash({ name: 'session', comboId: 'abc123' })).toBe('#/s/abc123')
     expect(routeHash({ name: 'questions' })).toBe('#/questions')
     expect(routeHash({ name: 'runs' })).toBe('#/runs')
+    expect(routeHash({ name: 'notFound', path: 'nope/x' })).toBe('#/nope/x')
   })
 
   it('encodes segments that contain reserved characters', () => {

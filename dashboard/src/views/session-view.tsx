@@ -21,7 +21,7 @@ type TranscriptState =
   | { status: "missing" };
 
 export interface SessionViewProps {
-  combo?: ComboEntry;
+  combo: ComboEntry;
 }
 
 const panelHeading =
@@ -42,40 +42,6 @@ const PARTICLE_COLORS = ["#a1a1aa", "#71717a", "#52525b"];
  * timeline. Port of the legacy SessionView.
  */
 export function SessionView({ combo }: SessionViewProps) {
-  const closeHash = combo
-    ? routeHash({ name: "question", question: combo.question.name })
-    : routeHash({ name: "home" });
-
-  useEffect(() => {
-    function onKeydown(event: KeyboardEvent) {
-      if (event.key === "Escape") window.location.hash = closeHash;
-    }
-    window.addEventListener("keydown", onKeydown);
-    return () => window.removeEventListener("keydown", onKeydown);
-  }, [closeHash]);
-
-  if (!combo) {
-    return (
-      <section className="mx-auto max-w-5xl px-4 py-8">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            window.location.hash = closeHash;
-          }}
-        >
-          ✕ Close
-        </Button>
-        <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
-          Session not found
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          No combo matches this link. Press Esc to go back.
-        </p>
-      </section>
-    );
-  }
-
   return <SessionContent combo={combo} />;
 }
 
