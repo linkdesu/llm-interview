@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cozy City Block · A Tiny Evening Diorama</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js + OrbitControls via CDN import map (keeps everything in 3 files) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Three.js canvas mounts here -->
+  <div id="app"></div>
+
+  <!-- Loading / start overlay: audio requires a user gesture to begin -->
+  <div id="start-overlay" class="overlay">
+    <div class="card">
+      <div class="title-wrap">
+        <span class="kicker">a tiny companion world</span>
+        <h1>Cozy City Block</h1>
+        <p class="sub">an evening diorama · orbit · zoom · lo-fi</p>
+      </div>
+      <button id="enter-btn" class="enter-btn" type="button">
+        <span class="play-dot" aria-hidden="true"></span>
+        Enter the neighborhood
+      </button>
+      <p class="hint">drag to orbit · scroll to zoom · click a lamp to dim the lights</p>
+    </div>
+  </div>
+
+  <!-- In-scene HUD -->
+  <div id="hud" class="hud hidden">
+    <div class="hud-top">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>Cozy City Block</span>
+      </div>
+      <div class="clock" id="clock">7:12 PM</div>
+    </div>
+  </div>
+
+  <!-- Transport / audio controls -->
+  <div id="controls" class="controls hidden">
+    <button id="audio-btn" class="ctrl-btn" type="button" title="Toggle music" aria-label="Toggle music">
+      <span class="ctrl-icon" aria-hidden="true">♪</span>
+      <span class="ctrl-label">Music</span>
+    </button>
+    <button id="traffic-btn" class="ctrl-btn" type="button" title="Toggle traffic" aria-label="Toggle traffic">
+      <span class="ctrl-icon" aria-hidden="true">✦</span>
+      <span class="ctrl-label">Traffic</span>
+    </button>
+    <button id="time-btn" class="ctrl-btn" type="button" title="Shift time of day" aria-label="Shift time of day">
+      <span class="ctrl-icon" aria-hidden="true">☾</span>
+      <span class="ctrl-label">Time</span>
+    </button>
+    <button id="reset-btn" class="ctrl-btn" type="button" title="Reset view" aria-label="Reset view">
+      <span class="ctrl-icon" aria-hidden="true">⌂</span>
+      <span class="ctrl-label">Reset</span>
+    </button>
+  </div>
+
+  <div id="caption" class="caption hidden">
+    <span id="caption-text"></span>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

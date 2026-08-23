@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browser OS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Desktop fills the whole viewport -->
+  <div id="desktop">
+    <!-- Desktop icons are injected by script.js from the app registry -->
+    <div id="desktop-icons" class="desktop-icons"></div>
+
+    <!-- Windows are injected by script.js -->
+    <div id="windows" class="windows"></div>
+  </div>
+
+  <!-- Taskbar fixed to the bottom of the screen -->
+  <div id="taskbar" class="taskbar">
+    <div id="taskbar-buttons" class="taskbar-buttons"></div>
+    <div id="clock" class="clock">00:00</div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

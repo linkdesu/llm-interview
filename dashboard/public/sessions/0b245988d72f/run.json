@@ -1,0 +1,30 @@
+{
+  "question": {
+    "name": "raptor-engine",
+    "hasSpec": false,
+    "hasTickets": false
+  },
+  "model": {
+    "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+    "provider": "idealsoft",
+    "modelId": "ai-01/ornith-1.5-35b"
+  },
+  "params": {
+    "thinking": "on",
+    "thinking_effort": "medium",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "0b245988d72f",
+  "piVersion": "0.84.2",
+  "startedAt": "2026-08-23T03:05:38.809Z",
+  "endedAt": "2026-08-23T03:49:02.180Z",
+  "durationMs": 2603360,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 0,
+  "contractViolations": []
+}

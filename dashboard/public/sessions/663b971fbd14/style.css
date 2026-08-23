@@ -1,0 +1,218 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --neon-cyan: #0ff;
+  --neon-magenta: #f0f;
+  --neon-lime: #39ff14;
+  --neon-pink: #ff2fa0;
+  --bg: #000;
+}
+
+html, body {
+  height: 100%;
+  background: radial-gradient(ellipse at center, #0a0a14 0%, #000 70%);
+  color: #eee;
+  font-family: "Segoe UI", "Orbitron", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+}
+
+#score {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 6px var(--neon-cyan), 0 0 14px rgba(0, 255, 255, 0.6);
+}
+
+#board-area {
+  position: relative;
+  width: 500px;
+  height: 500px;
+}
+
+#board {
+  display: block;
+  background: #000;
+  border: 2px solid #0ff;
+  border-radius: 6px;
+  box-shadow: 0 0 12px var(--neon-cyan), 0 0 30px rgba(0, 255, 255, 0.45), inset 0 0 18px rgba(0, 255, 255, 0.15);
+  width: 500px;
+  height: 500px;
+}
+
+/* Overlays cover the board area */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+/* Start menu */
+#startmenu {
+  flex-direction: column;
+  gap: 18px;
+}
+
+.menu-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  background: rgba(10, 10, 18, 0.92);
+  border: 1px solid #0ff;
+  border-radius: 10px;
+  padding: 28px 34px;
+  box-shadow: 0 0 14px var(--neon-cyan), 0 0 34px rgba(0, 255, 255, 0.35), inset 0 0 12px rgba(0, 255, 255, 0.12);
+}
+
+#title {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 10px;
+  margin-bottom: 6px;
+  color: var(--neon-magenta);
+  text-shadow: 0 0 8px var(--neon-magenta), 0 0 20px rgba(255, 0, 255, 0.7), 0 0 40px rgba(255, 0, 255, 0.4);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.high-label {
+  color: #aaa;
+}
+
+.high-value {
+  font-weight: 700;
+  color: var(--neon-lime);
+  text-shadow: 0 0 6px var(--neon-lime), 0 0 14px rgba(57, 255, 20, 0.55);
+}
+
+#boardsize {
+  width: 90px;
+  padding: 6px 8px;
+  font-size: 16px;
+  background: #000;
+  color: var(--neon-lime);
+  border: 1px solid #0ff;
+  border-radius: 4px;
+  text-align: center;
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+  outline: none;
+}
+
+#boardsize:focus {
+  box-shadow: 0 0 12px var(--neon-cyan), 0 0 24px rgba(0, 255, 255, 0.6);
+}
+
+button {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 11px 26px;
+  cursor: pointer;
+  background: #000;
+  color: var(--neon-cyan);
+  border: 2px solid var(--neon-cyan);
+  border-radius: 6px;
+  text-shadow: 0 0 6px var(--neon-cyan);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.5), inset 0 0 6px rgba(0, 255, 255, 0.15);
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+button:hover {
+  background: var(--neon-cyan);
+  color: #000;
+  text-shadow: none;
+  box-shadow: 0 0 14px var(--neon-cyan), 0 0 30px rgba(0, 255, 255, 0.7);
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+/* Ready overlay */
+.ready-text {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 8px var(--neon-cyan), 0 0 18px rgba(0, 255, 255, 0.6);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Game over */
+#gameover {
+  flex-direction: column;
+  gap: 12px;
+}
+
+.go-text {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--neon-pink);
+  text-shadow: 0 0 8px var(--neon-pink), 0 0 20px rgba(255, 47, 160, 0.7), 0 0 40px rgba(255, 47, 160, 0.4);
+  margin-bottom: 8px;
+}
+
+.go-score {
+  font-size: 22px;
+  letter-spacing: 1px;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 6px var(--neon-cyan);
+  margin-bottom: 4px;
+}
+
+.go-high {
+  font-size: 17px;
+  color: var(--neon-lime);
+  text-shadow: 0 0 6px var(--neon-lime);
+  margin-bottom: 8px;
+}
+
+/* Responsive: scale the board area to fit the viewport */
+@media (max-width: 600px), (max-height: 600px) {
+  #board-area {
+    width: min(500px, 90vw);
+    height: min(500px, 90vh);
+  }
+  #board {
+    width: min(500px, 90vw);
+    height: min(500px, 90vh);
+  }
+}

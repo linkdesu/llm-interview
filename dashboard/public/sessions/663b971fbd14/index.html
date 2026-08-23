@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="wrap">
+    <div id="score">Score: 0</div>
+    <div id="board-area">
+      <canvas id="board" width="500" height="500"></canvas>
+
+      <!-- Start menu -->
+      <div id="startmenu" class="overlay">
+        <div class="menu-box">
+          <h1 id="title">SNAKE</h1>
+          <div class="row">
+            <label for="boardsize">Board size</label>
+            <input id="boardsize" type="number" min="10" max="99" step="1" value="20">
+          </div>
+          <div class="row">
+            <span class="high-label">High score</span>
+            <span id="highscore" class="high-value">0</span>
+          </div>
+          <button id="startbtn" type="button">Start Game</button>
+        </div>
+      </div>
+
+      <!-- Ready overlay: press any key to begin -->
+      <div id="ready" class="overlay hidden">
+        <div class="ready-text">Press any key to start</div>
+      </div>
+
+      <!-- Game over -->
+      <div id="gameover" class="overlay hidden">
+        <div class="go-text">Game Over</div>
+        <div class="go-score"></div>
+        <div class="go-high"></div>
+        <button id="playagain" type="button">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

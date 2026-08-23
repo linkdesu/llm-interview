@@ -2,100 +2,76 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>City Time Machine — A Cozy City Block Diorama</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cozy City Block — Time Machine Diorama</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Three.js from CDN, imported as an ES module -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-    }
-  }
-  </script>
 </head>
 <body>
-  <!-- Loading / start overlay: audio context requires a user gesture -->
-  <div id="start-overlay" class="start-overlay">
+  <div id="app"></div>
+
+  <!-- Loading / start overlay -->
+  <div id="start-overlay" class="overlay">
     <div class="start-card">
-      <h1 class="title">City Time Machine</h1>
-      <p class="subtitle">A cozy little city block to linger over</p>
-      <button id="enter-btn" class="enter-btn" @uid="enter-btn">
-        <span class="enter-btn__icon">◐</span>
-        Enter the miniature
-      </button>
-      <p class="hint">Click to begin · drag to orbit · scroll to zoom</p>
+      <div class="start-title">City Time Machine</div>
+      <div class="start-sub">A cozy little block, frozen in golden hour</div>
+      <button id="start-btn" class="btn-primary">Enter the Diorama</button>
+      <div class="start-hint">Drag to orbit · Scroll to zoom · Click objects to learn</div>
     </div>
   </div>
 
-  <!-- The 3D canvas mounts here -->
-  <div id="scene-container"></div>
-
-  <!-- HUD / controls -->
-  <header class="hud-top">
-    <div class="brand">
-      <span class="brand__mark">◐</span>
-      <span class="brand__name">City Time Machine</span>
+  <!-- HUD -->
+  <header id="hud" class="hud hidden">
+    <div class="hud-left">
+      <span class="logo">◈ City Time Machine</span>
+      <span id="time-badge" class="time-badge">Golden Hour · 17:42</span>
     </div>
-    <div class="clock" @uid="clock">
-      <span class="clock__day" id="clock-day">Dusk</span>
-      <span class="clock__time" id="clock-time">19:42</span>
+    <div class="hud-right">
+      <!-- Audio toggles -->
+      <div class="control-group">
+        <button id="music-btn" class="ctrl-btn" @uid="music-btn" title="Toggle lo-fi music">
+          <span class="icon">♪</span><span class="label">Music</span>
+        </button>
+        <button id="amb-btn" class="ctrl-btn" @uid="amb-btn" title="Toggle ambient sounds">
+          <span class="icon">🌙</span><span class="label">Ambience</span>
+        </button>
+      </div>
+      <!-- Time of day -->
+      <div class="control-group">
+        <button id="time-btn" class="ctrl-btn" @uid="time-btn" title="Cycle time of day">
+          <span class="icon">☀</span><span class="label">Time</span>
+        </button>
+      </div>
+      <!-- Reset camera -->
+      <button id="reset-btn" class="ctrl-btn" @uid="reset-btn" title="Reset camera view">
+        <span class="icon">⌂</span><span class="label">Reset</span>
+      </button>
     </div>
   </header>
 
-  <!-- Control panel -->
-  <aside class="control-panel" @uid="control-panel">
-    <div class="control-group">
-      <label for="audio-toggle">Sound</label>
-      <button id="audio-toggle" class="toggle-btn" @uid="audio-toggle" aria-pressed="true">
-        <span class="toggle-btn__glyph">♪</span>
-        <span class="toggle-btn__label">Lo-fi</span>
-      </button>
-    </div>
-
-    <div class="control-group">
-      <label>Time of Day</label>
-      <div class="time-slider" @uid="time-slider">
-        <input id="time-range" type="range" min="0" max="100" value="65" @uid="time-range" />
-        <div class="time-track">
-          <span>☀</span><span>◔</span><span>☾</span><span>◑</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="control-group">
-      <label>Scene</label>
-      <div class="btn-row">
-        <button id="day-btn" class="mini-btn" @uid="day-btn">Day</button>
-        <button id="dusk-btn" class="mini-btn" @uid="dusk-btn">Dusk</button>
-        <button id="night-btn" class="mini-btn" @uid="night-btn">Night</button>
-      </div>
-    </div>
-
-    <div class="control-group">
-      <label>Auto-Orbit</label>
-      <button id="orbit-toggle" class="toggle-btn" @uid="orbit-toggle" aria-pressed="true">
-        <span class="toggle-btn__glyph">⟳</span>
-        <span class="toggle-btn__label">On</span>
-      </button>
-    </div>
+  <!-- Info card (appears when clicking an object) -->
+  <aside id="info-card" class="info-card hidden">
+    <button id="info-close" class="info-close" @uid="info-close" title="Close">×</button>
+    <div class="info-icon" @uid="info-icon">🏪</div>
+    <h2 id="info-title" class="info-title">Storefront</h2>
+    <p id="info-desc" class="info-desc">A cozy little shop.</p>
   </aside>
 
-  <!-- Info tooltip that follows clicked buildings -->
-  <div id="info-card" class="info-card" hidden>
-    <h3 id="info-title" class="info-card__title">Cafe</h3>
-    <p id="info-desc" class="info-card__desc"></p>
-  </div>
-
-  <footer class="hud-bottom">
-    <span>Drag to orbit</span>
-    <span>•</span>
-    <span>Scroll to zoom</span>
-    <span>•</span>
-    <span>Click a building</span>
+  <!-- Legend / controls help -->
+  <footer id="legend" class="legend hidden">
+    <div class="legend-item"><span class="kbd">Drag</span> Orbit</div>
+    <div class="legend-item"><span class="kbd">Scroll</span> Zoom</div>
+    <div class="legend-item"><span class="kbd">Click</span> Inspect</div>
+    <div class="legend-item"><span class="kbd">Tab</span> Next object</div>
   </footer>
 
-  <script type="module" src="script.js"></script>
+  <!-- Loading progress -->
+  <div id="loader" class="loader hidden">
+    <div class="spinner"></div>
+    <div id="load-text">Building the block…</div>
+  </div>
+
+  <!-- Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>

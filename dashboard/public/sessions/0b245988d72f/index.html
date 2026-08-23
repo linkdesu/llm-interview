@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpaceX Raptor Engine — 3D View</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:," />
+</head>
+<body>
+  <!-- Loading / status overlay -->
+  <div id="hud">
+    <div id="title">Raptor Engine</div>
+    <div id="subtitle">Full-Flow Staged Combustion</div>
+    <div id="controls">
+      <label><input type="checkbox" id="toggle-spin" checked /> Auto-rotate</label>
+      <label><input type="checkbox" id="toggle-exhaust" checked /> Exhaust glow</label>
+      <button id="btn-gimbal">Toggle Gimbal</button>
+      <button id="btn-reset">Reset View</button>
+    </div>
+    <div id="hint">Drag to orbit · Scroll to zoom</div>
+  </div>
+
+  <canvas id="scene"></canvas>
+
+  <!-- three.js via CDN import map -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

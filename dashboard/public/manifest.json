@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-21T18:19:19.259Z",
+  "generatedAt": "2026-08-23T06:23:24.651Z",
   "combos": [
     {
       "comboId": "edd4ba46e046",
@@ -24,6 +24,8 @@
       "startedAt": "2026-08-16T03:26:14.142Z",
       "endedAt": "2026-08-16T07:09:16.407Z",
       "durationMs": 13382235,
+      "totalTokens": 28249224,
+      "turnCount": 591,
       "status": "ok",
       "contractViolations": [
         "unexpected file: out.log"
@@ -61,6 +63,8 @@
       "startedAt": "2026-08-21T17:41:16.400Z",
       "endedAt": "2026-08-21T18:03:28.910Z",
       "durationMs": 1332502,
+      "totalTokens": 3893755,
+      "turnCount": 108,
       "status": "error",
       "contractViolations": [],
       "files": {
@@ -72,6 +76,44 @@
       },
       "maxTurnsExceeded": true,
       "maxTurns": 100
+    },
+    {
+      "comboId": "cd98e0cb0696",
+      "question": {
+        "name": "browser-os",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.5-35b"
+      },
+      "params": {
+        "thinking": "on",
+        "thinking_effort": "medium",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-22T17:11:52.643Z",
+      "endedAt": "2026-08-22T18:27:27.779Z",
+      "durationMs": 4535080,
+      "totalTokens": 17876240,
+      "turnCount": 396,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/cd98e0cb0696/index.html",
+        "style": "sessions/cd98e0cb0696/style.css",
+        "script": "sessions/cd98e0cb0696/script.js",
+        "transcript": "sessions/cd98e0cb0696/session.jsonl",
+        "run": "sessions/cd98e0cb0696/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 0
     },
     {
       "comboId": "7acb0fcc1c92",
@@ -98,6 +140,8 @@
       "startedAt": "2026-07-27T08:10:26.807Z",
       "endedAt": "2026-07-27T09:02:28.940Z",
       "durationMs": 3122020,
+      "totalTokens": 21630835,
+      "turnCount": 486,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -133,6 +177,8 @@
       "startedAt": "2026-08-16T11:09:44.521Z",
       "endedAt": "2026-08-16T11:43:00.846Z",
       "durationMs": 1996307,
+      "totalTokens": 913520,
+      "turnCount": 41,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -170,6 +216,8 @@
       "startedAt": "2026-08-16T15:03:03.578Z",
       "endedAt": "2026-08-16T15:59:58.534Z",
       "durationMs": 3414916,
+      "totalTokens": 5664640,
+      "turnCount": 147,
       "status": "error",
       "contractViolations": [],
       "files": {
@@ -207,6 +255,8 @@
       "startedAt": "2026-08-08T08:07:27.212Z",
       "endedAt": "2026-08-08T08:19:38.692Z",
       "durationMs": 730617,
+      "totalTokens": 8602125,
+      "turnCount": 203,
       "status": "error",
       "contractViolations": [
         "unexpected file: screenshot1.png",
@@ -247,6 +297,8 @@
       "startedAt": "2026-07-26T17:15:10.243Z",
       "endedAt": "2026-07-26T18:26:23.829Z",
       "durationMs": 4273557,
+      "totalTokens": 11579457,
+      "turnCount": 426,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -282,6 +334,8 @@
       "startedAt": "2026-08-16T03:26:14.143Z",
       "endedAt": "2026-08-16T03:54:41.237Z",
       "durationMs": 1707086,
+      "totalTokens": 1926624,
+      "turnCount": 51,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -314,9 +368,11 @@
         "repeat_penalty": 1
       },
       "piVersion": "0.84.2",
-      "startedAt": "2026-08-21T12:08:08.850Z",
-      "endedAt": "2026-08-21T12:43:09.613Z",
-      "durationMs": 2100704,
+      "startedAt": "2026-08-21T18:03:28.914Z",
+      "endedAt": "2026-08-21T19:12:13.605Z",
+      "durationMs": 4124677,
+      "totalTokens": 3710467,
+      "turnCount": 100,
       "status": "error",
       "contractViolations": [],
       "files": {
@@ -328,6 +384,44 @@
       },
       "maxTurnsExceeded": true,
       "maxTurns": 100
+    },
+    {
+      "comboId": "6637e056e531",
+      "question": {
+        "name": "city-time-machine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.5-35b"
+      },
+      "params": {
+        "thinking": "on",
+        "thinking_effort": "medium",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-22T18:27:27.793Z",
+      "endedAt": "2026-08-22T19:06:46.743Z",
+      "durationMs": 2358936,
+      "totalTokens": 13931148,
+      "turnCount": 193,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/6637e056e531/index.html",
+        "style": "sessions/6637e056e531/style.css",
+        "script": "sessions/6637e056e531/script.js",
+        "transcript": "sessions/6637e056e531/session.jsonl",
+        "run": "sessions/6637e056e531/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 0
     },
     {
       "comboId": "2795bb809d1e",
@@ -354,6 +448,8 @@
       "startedAt": "2026-07-26T10:39:57.963Z",
       "endedAt": "2026-07-26T11:14:50.289Z",
       "durationMs": 2092311,
+      "totalTokens": 2876337,
+      "turnCount": 100,
       "status": "error",
       "contractViolations": [],
       "files": {
@@ -391,6 +487,8 @@
       "startedAt": "2026-07-27T09:02:28.951Z",
       "endedAt": "2026-07-27T09:31:45.815Z",
       "durationMs": 1756847,
+      "totalTokens": 5933360,
+      "turnCount": 100,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -426,6 +524,8 @@
       "startedAt": "2026-08-16T11:43:00.849Z",
       "endedAt": "2026-08-16T11:48:10.566Z",
       "durationMs": 309715,
+      "totalTokens": 18550,
+      "turnCount": 1,
       "status": "ok",
       "contractViolations": [
         "missing expected artifact: index.html",
@@ -464,6 +564,8 @@
       "startedAt": "2026-08-16T15:59:58.539Z",
       "endedAt": "2026-08-16T16:49:12.232Z",
       "durationMs": 2953679,
+      "totalTokens": 7295844,
+      "turnCount": 89,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -501,6 +603,8 @@
       "startedAt": "2026-08-08T08:19:38.728Z",
       "endedAt": "2026-08-08T08:31:46.621Z",
       "durationMs": 727874,
+      "totalTokens": 9519108,
+      "turnCount": 200,
       "status": "error",
       "contractViolations": [
         "unexpected file: out.log"
@@ -540,6 +644,8 @@
       "startedAt": "2026-07-27T06:54:56.558Z",
       "endedAt": "2026-07-27T07:07:47.594Z",
       "durationMs": 771016,
+      "totalTokens": 6163296,
+      "turnCount": 113,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -551,6 +657,44 @@
       },
       "maxTurnsExceeded": false,
       "maxTurns": 200
+    },
+    {
+      "comboId": "0b245988d72f",
+      "question": {
+        "name": "raptor-engine",
+        "hasSpec": false,
+        "hasTickets": false
+      },
+      "model": {
+        "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.5-35b"
+      },
+      "params": {
+        "thinking": "on",
+        "thinking_effort": "medium",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-23T03:05:38.809Z",
+      "endedAt": "2026-08-23T03:49:02.180Z",
+      "durationMs": 2603360,
+      "totalTokens": 4680806,
+      "turnCount": 113,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/0b245988d72f/index.html",
+        "style": "sessions/0b245988d72f/style.css",
+        "script": "sessions/0b245988d72f/script.js",
+        "transcript": "sessions/0b245988d72f/session.jsonl",
+        "run": "sessions/0b245988d72f/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 0
     },
     {
       "comboId": "edb63fd5eca3",
@@ -575,6 +719,8 @@
       "startedAt": "2026-08-15T18:02:34.444Z",
       "endedAt": "2026-08-15T18:46:56.539Z",
       "durationMs": 2662080,
+      "totalTokens": 7963156,
+      "turnCount": 170,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -586,6 +732,44 @@
       },
       "maxTurnsExceeded": false,
       "maxTurns": 100
+    },
+    {
+      "comboId": "663b971fbd14",
+      "question": {
+        "name": "snake",
+        "hasSpec": true,
+        "hasTickets": true
+      },
+      "model": {
+        "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+        "provider": "idealsoft",
+        "modelId": "ai-01/ornith-1.5-35b"
+      },
+      "params": {
+        "thinking": "on",
+        "thinking_effort": "medium",
+        "temp": 0.6,
+        "top_k": 20,
+        "top_p": 0.95,
+        "repeat_penalty": 1
+      },
+      "piVersion": "0.84.2",
+      "startedAt": "2026-08-23T03:49:02.190Z",
+      "endedAt": "2026-08-23T04:02:54.968Z",
+      "durationMs": 832772,
+      "totalTokens": 1845656,
+      "turnCount": 107,
+      "status": "ok",
+      "contractViolations": [],
+      "files": {
+        "artifact": "sessions/663b971fbd14/index.html",
+        "style": "sessions/663b971fbd14/style.css",
+        "script": "sessions/663b971fbd14/script.js",
+        "transcript": "sessions/663b971fbd14/session.jsonl",
+        "run": "sessions/663b971fbd14/run.json"
+      },
+      "maxTurnsExceeded": false,
+      "maxTurns": 0
     },
     {
       "comboId": "1d934d169f5b",
@@ -610,6 +794,8 @@
       "startedAt": "2026-08-21T14:30:53.868Z",
       "endedAt": "2026-08-21T15:44:55.245Z",
       "durationMs": 4441360,
+      "totalTokens": 9426794,
+      "turnCount": 307,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -647,6 +833,8 @@
       "startedAt": "2026-07-26T04:42:20.334Z",
       "endedAt": "2026-07-26T05:02:12.333Z",
       "durationMs": 1191991,
+      "totalTokens": 2054670,
+      "turnCount": 73,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -684,6 +872,8 @@
       "startedAt": "2026-07-27T09:31:45.818Z",
       "endedAt": "2026-07-27T09:55:04.930Z",
       "durationMs": 1399102,
+      "totalTokens": 7721266,
+      "turnCount": 216,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -719,6 +909,8 @@
       "startedAt": "2026-08-16T11:48:10.569Z",
       "endedAt": "2026-08-16T12:04:02.512Z",
       "durationMs": 951937,
+      "totalTokens": 631211,
+      "turnCount": 29,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -756,6 +948,8 @@
       "startedAt": "2026-08-16T16:49:12.237Z",
       "endedAt": "2026-08-16T17:23:47.106Z",
       "durationMs": 2074852,
+      "totalTokens": 3451311,
+      "turnCount": 138,
       "status": "ok",
       "contractViolations": [],
       "files": {
@@ -793,6 +987,8 @@
       "startedAt": "2026-08-08T08:39:08.909Z",
       "endedAt": "2026-08-08T08:42:19.223Z",
       "durationMs": 190308,
+      "totalTokens": 670624,
+      "turnCount": 45,
       "status": "error",
       "contractViolations": [],
       "files": {
@@ -830,6 +1026,8 @@
       "startedAt": "2026-07-27T07:44:28.869Z",
       "endedAt": "2026-07-27T08:08:01.573Z",
       "durationMs": 1412694,
+      "totalTokens": 5259493,
+      "turnCount": 230,
       "status": "ok",
       "contractViolations": [],
       "files": {

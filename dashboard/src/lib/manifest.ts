@@ -31,6 +31,10 @@ export interface ComboEntry {
   startedAt: string
   endedAt: string
   durationMs: number
+  /** Total model tokens across the archived transcript (0 when absent). */
+  totalTokens?: number
+  /** Model reply turns recorded in the transcript (0 when absent). */
+  turnCount?: number
   status: string
   contractViolations: string[]
   maxTurnsExceeded?: boolean

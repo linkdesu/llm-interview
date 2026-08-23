@@ -18,12 +18,16 @@
   },
   "comboId": "fcc3cc4840f7",
   "piVersion": "0.84.2",
-  "startedAt": "2026-08-21T12:08:08.850Z",
-  "endedAt": "2026-08-21T12:43:09.613Z",
-  "durationMs": 2100704,
+  "startedAt": "2026-08-21T18:03:28.914Z",
+  "endedAt": "2026-08-21T19:12:13.605Z",
+  "durationMs": 4124677,
   "status": "error",
   "exitCode": null,
   "maxTurnsExceeded": true,
   "maxTurns": 100,
-  "contractViolations": []
+  "contractViolations": [],
+  "failureReason": {
+    "kind": "max-turns",
+    "message": "The run was killed for exceeding the max turn limit"
+  }
 }

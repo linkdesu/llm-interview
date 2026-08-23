@@ -1,0 +1,119 @@
+{
+  "question": {
+    "name": "browser-os",
+    "hasSpec": true,
+    "hasTickets": true
+  },
+  "model": {
+    "name": "Ornith-1.5-35B-A3B-oQ4e-mtp",
+    "provider": "idealsoft",
+    "modelId": "ai-01/ornith-1.5-35b"
+  },
+  "params": {
+    "thinking": "on",
+    "thinking_effort": "medium",
+    "temp": 0.6,
+    "top_k": 20,
+    "top_p": 0.95,
+    "repeat_penalty": 1
+  },
+  "comboId": "cd98e0cb0696",
+  "piVersion": "0.84.2",
+  "startedAt": "2026-08-22T17:11:52.643Z",
+  "endedAt": "2026-08-22T18:27:27.779Z",
+  "durationMs": 4535080,
+  "status": "ok",
+  "exitCode": 0,
+  "maxTurnsExceeded": false,
+  "maxTurns": 0,
+  "contractViolations": [],
+  "invocations": [
+    {
+      "ticket": 1,
+      "ticketTitle": "Desktop shell: Window manager and taskbar.",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 171430
+    },
+    {
+      "ticket": 2,
+      "ticketTitle": "Wallpaper",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 141864
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Calculator",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 457857
+    },
+    {
+      "ticket": 3,
+      "ticketTitle": "Calculator",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 124690
+    },
+    {
+      "ticket": 4,
+      "ticketTitle": "Notepad",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 453048
+    },
+    {
+      "ticket": 5,
+      "ticketTitle": "Minesweeper",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 1023034
+    },
+    {
+      "ticket": 5,
+      "ticketTitle": "Minesweeper",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 50766
+    },
+    {
+      "ticket": 6,
+      "ticketTitle": "Spider Solitaire",
+      "dirty": true,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 2025728
+    },
+    {
+      "ticket": 6,
+      "ticketTitle": "Spider Solitaire",
+      "evaluation": true,
+      "verdict": "complete",
+      "dirty": false,
+      "status": "ok",
+      "exitCode": 0,
+      "maxTurnsExceeded": false,
+      "durationMs": 86495
+    }
+  ]
+}

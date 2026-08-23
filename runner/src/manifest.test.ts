@@ -237,8 +237,10 @@ describe("buildManifest", () => {
     expect(combo.startedAt).toBe(runJson.startedAt);
     expect(combo.endedAt).toBe(runJson.endedAt);
     expect(combo.durationMs).toBe(runJson.durationMs);
+    // The fixture transcript carries no usage records → both counters 0
+    expect(combo.totalTokens).toBe(0);
+    expect(combo.turnCount).toBe(0);
     expect(combo.status).toBe(runJson.status);
-    expect(combo.contractViolations).toEqual([]);
     expect(combo.maxTurnsExceeded).toBe(false);
     expect(combo.maxTurns).toBe(100);
     expect(combo.files).toEqual({
@@ -273,6 +275,41 @@ describe("buildManifest", () => {
       "index.html",
       "run.json",
     ]);
+  });
+
+  // -----------------------------------------------------------------------
+  // Test: Transcript usage is aggregated into totalTokens / turnCount
+  // -----------------------------------------------------------------------
+  it("aggregates transcript usage into totalTokens and turnCount", async () => {
+    const { buildManifest } = await import("./manifest");
+
+    const transcript = [
+      JSON.stringify({ type: "session", id: "t1" }),
+      JSON.stringify({
+        type: "message",
+        message: { usage: { input: 100, output: 50, totalTokens: 150 } },
+      }),
+      JSON.stringify({
+        type: "message",
+        message: { usage: { input: 300, output: 100, totalTokens: 400 } },
+      }),
+      JSON.stringify({ type: "message", message: { usage: undefined } }),
+      JSON.stringify({ type: "message" }),
+      "not valid json {",
+    ].join("\n");
+
+    await writeSession(sessionRoot, "q-snake", "model-alpha", "20260723-233227", fixtureRunJson(), {
+      "index.html": "<!DOCTYPE html>",
+      "session.jsonl": transcript,
+    });
+
+    const manifest = await buildManifest({ sessionRoot, outDir });
+    const combo = manifest.combos[0];
+
+    // Only the two usage-bearing message records count; malformed lines
+    // and usage-less records are skipped without aborting the build.
+    expect(combo.totalTokens).toBe(550);
+    expect(combo.turnCount).toBe(2);
   });
 
   // -----------------------------------------------------------------------

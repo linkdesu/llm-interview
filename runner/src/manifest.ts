@@ -52,6 +52,17 @@ export interface ManifestCombo {
   endedAt: string;
   /** Duration in milliseconds. */
   durationMs: number;
+  /**
+   * Total model tokens across the archived transcript: sum of each
+   * message's usage.totalTokens (cache reads included). 0 when the
+   * transcript is missing or carries no usage records.
+   */
+  totalTokens: number;
+  /**
+   * Number of transcript message records carrying usage — the model's
+   * reply turns in the archived run. 0 when the transcript is missing.
+   */
+  turnCount: number;
   /** Run status: "ok" or "error" ("timeout" may appear in older archives). */
   status: RunJson["status"];
   /** Artifact contract violation messages (empty if compliant). */
@@ -184,6 +195,49 @@ function isLater(a: ArchivedRun, b: ArchivedRun): boolean {
 // Build
 // ---------------------------------------------------------------------------
 
+type TranscriptLine = {
+  type?: string;
+  message?: { usage?: { totalTokens?: number } };
+};
+
+/**
+ * Aggregate usage from a winner run's archived session.jsonl: the sum of
+ * each message record's usage.totalTokens and the count of such records
+ * (the model's reply turns). A missing or partially malformed transcript
+ * yields what it actually contains — never an error — so failed runs
+ * simply contribute 0.
+ */
+async function aggregateTranscriptUsage(dir: string): Promise<{
+  totalTokens: number;
+  turnCount: number;
+}> {
+  let content: string;
+  try {
+    content = await readFile(join(dir, "session.jsonl"), "utf-8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") throw err;
+    return { totalTokens: 0, turnCount: 0 };
+  }
+  let totalTokens = 0;
+  let turnCount = 0;
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let record: TranscriptLine;
+    try {
+      record = JSON.parse(trimmed) as TranscriptLine;
+    } catch {
+      continue; // an undecodable line must not abort the build
+    }
+    const total = record.type === "message" ? record.message?.usage?.totalTokens : undefined;
+    if (typeof total === "number") {
+      totalTokens += total;
+      turnCount += 1;
+    }
+  }
+  return { totalTokens, turnCount };
+}
+
 /**
  * Build the Manifest: scan the full session history, keep the latest Run
  * per Combo, copy its files into <outDir>/sessions/<comboId>/, and write
@@ -217,6 +271,7 @@ export async function buildManifest(
       }
     }
 
+    const usage = await aggregateTranscriptUsage(dir);
     const combo: ManifestCombo = {
       comboId: run.comboId,
       question: run.question,
@@ -226,6 +281,8 @@ export async function buildManifest(
       startedAt: run.startedAt,
       endedAt: run.endedAt,
       durationMs: run.durationMs,
+      totalTokens: usage.totalTokens,
+      turnCount: usage.turnCount,
       status: run.status,
       contractViolations: run.contractViolations ?? [],
       files,

@@ -1,0 +1,1230 @@
+/* Browser OS — styles (Windows 11 / macOS flat design) */
+
+:root {
+  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --accent: #0078d4;
+  --text: #1b1b1f;
+  --text-secondary: #5b5b66;
+  --window-bg: #fdfdfd;
+  --titlebar-bg: #f3f3f3;
+  --taskbar-bg: rgba(243, 243, 243, 0.78);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  --shadow-focused: 0 16px 52px rgba(0, 0, 0, 0.38);
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-stack);
+  color: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Desktop */
+#desktop {
+  position: fixed;
+  inset: 0;
+  background: #2a2a35;
+  overflow: hidden;
+}
+
+/* -- Wallpaper presets (Ticket 2) ----------------------------------
+   Eight built-in presets implemented purely in CSS. Each preset is a
+   class applied to #desktop (and reused for the picker thumbnails).
+   A mix of solid colors, gradients and simple CSS patterns. */
+
+/* 1. Ocean — diagonal blue gradient */
+#desktop.wp-ocean,
+.wp-ocean { background: linear-gradient(135deg, #1e3c72, #2a5298); }
+
+/* 2. Aurora — teal to blue gradient */
+#desktop.wp-aurora,
+.wp-aurora { background: linear-gradient(135deg, #43cea2, #185a9b); }
+
+/* 3. Sunset — warm pink/orange gradient */
+#desktop.wp-sunset,
+.wp-sunset { background: linear-gradient(135deg, #f5af19, #d5435f); }
+
+/* 4. Twilight — deep indigo to navy */
+#desktop.wp-twilight,
+.wp-twilight { background: linear-gradient(135deg, #141e30, #243b55); }
+
+/* 5. Rose — solid muted rose */
+#desktop.wp-rose,
+.wp-rose { background: #c2185b; }
+
+/* 6. Sage — solid muted sage green */
+#desktop.wp-sage,
+.wp-sage { background: #4d7a5a; }
+
+/* 7. Sand — solid warm sand */
+#desktop.wp-sand,
+.wp-sand { background: #b08d57; }
+
+/* 8. Stripes — repeating diagonal pattern (CSS pattern) */
+#desktop.wp-stripes,
+.wp-stripes {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #3a4a5a 0px,
+      #3a4a5a 14px,
+      #4a5f75 14px,
+      #4a5f75 28px
+    );
+}
+
+/* 9. Graph — repeating grid pattern (CSS pattern) */
+#desktop.wp-graph,
+.wp-graph {
+  background-color: #2b3a4a;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* 10. Dots — repeating dotted pattern (CSS pattern) */
+#desktop.wp-dots,
+.wp-dots {
+  background-color: #22303c;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 2px, transparent 2px);
+  background-size: 24px 24px;
+}
+
+.desktop-icons {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: calc(100vh - 90px);
+  align-content: flex-start;
+}
+
+.desktop-icon {
+  width: 84px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.desktop-icon:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.desktop-icon.selected {
+  background: rgba(255, 255, 255, 0.24);
+  outline: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.desktop-icon .icon-glyph {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+.desktop-icon .icon-label {
+  font-size: 12px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+/* Windows */
+.windows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.window {
+  position: absolute;
+  min-width: 280px;
+  min-height: 180px;
+  background: var(--window-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  transform: translate(var(--x, 0px), var(--y, 0px));
+}
+
+.window.focused {
+  box-shadow: var(--shadow-focused);
+}
+
+.window-titlebar {
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  background: var(--titlebar-bg);
+  border-bottom: 1px solid #e6e6e6;
+  cursor: default;
+}
+
+.window.focused .window-titlebar {
+  background: #fafafa;
+}
+
+.window-titlebar .win-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.window-titlebar .win-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.window-titlebar .win-close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.window-titlebar .win-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.window-body {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;
+  background: var(--window-bg);
+}
+
+.window-body .placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 16px;
+}
+
+/* Resize handle (optional, keeps windows within viewport) */
+.window-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+/* Taskbar */
+.taskbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  background: var(--taskbar-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  z-index: 10000;
+}
+
+.taskbar-buttons {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.taskbar-button {
+  height: 38px;
+  min-width: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text);
+  font-family: var(--font-stack);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  max-width: 200px;
+}
+
+.taskbar-button .tb-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.taskbar-button .tb-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskbar-button:hover {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.taskbar-button.active {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 2px 0 var(--accent), 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.taskbar-button.active::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.clock {
+  flex: 0 0 auto;
+  font-size: 13px;
+  padding: 0 10px;
+  color: var(--text);
+  min-width: 62px;
+  text-align: center;
+}
+
+/* -- Context menu (Ticket 2) --------------------------------------- */
+.context-menu {
+  position: fixed;
+  min-width: 190px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 10px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  padding: 6px;
+  z-index: 10001;
+  display: none;
+}
+
+.context-menu.open { display: block; }
+
+.context-menu-title {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  font-family: var(--font-stack);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.context-menu-item:hover {
+  background: rgba(0, 120, 212, 0.12);
+}
+
+.context-menu-item .cm-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.context-menu-sep {
+  height: 1px;
+  margin: 5px 8px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* -- Wallpaper picker (Ticket 2) ----------------------------------- */
+.wallpaper-picker {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.34);
+  padding: 14px;
+  z-index: 10001;
+  display: none;
+}
+
+.wallpaper-picker.open { display: block; }
+
+.wallpaper-picker h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 4px 6px 12px;
+  color: var(--text);
+}
+
+.wp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.wp-thumbnail {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  border: 2px solid transparent;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+}
+
+.wp-thumbnail:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.wp-thumbnail.selected {
+  border-color: var(--accent);
+}
+
+.wp-thumbnail .wp-thumb-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), transparent);
+}
+
+.wp-thumbnail .wp-check {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.wp-thumbnail.selected .wp-check {
+  display: flex;
+}
+
+/* -- Notepad (Ticket 4) --------------------------------------------
+   Fills the window body with a left sidebar (actions + document list)
+   and a full-height textarea for the active document. Documents are
+   named and persisted in localStorage. */
+
+.notepad {
+  display: flex;
+  height: 100%;
+  background: var(--window-bg);
+  overflow: hidden;
+}
+
+.notepad-sidebar {
+  width: 190px;
+  flex: 0 0 190px;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f6;
+  border-right: 1px solid #e8e8e8;
+  overflow: hidden;
+}
+
+.notepad-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.notepad-action {
+  border: none;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-family: var(--font-stack);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #eef0f2;
+  color: var(--text);
+}
+
+.notepad-action:hover {
+  background: #e2e6ea;
+}
+
+.notepad-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.notepad-action.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.notepad-action.primary:hover {
+  filter: brightness(1.05);
+}
+
+.notepad-action.danger {
+  color: #b42318;
+}
+
+.notepad-action.danger:hover {
+  background: #fde2df;
+}
+
+.notepad-docs-title {
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.notepad-docs {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 6px;
+}
+
+.notepad-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.notepad-doc:hover {
+  background: #ececee;
+}
+
+.notepad-doc.active {
+  background: rgba(0, 120, 212, 0.14);
+}
+
+.notepad-doc .doc-icon {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+.notepad-doc .doc-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notepad-empty {
+  padding: 12px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.notepad-main {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.notepad-textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 14px 16px;
+  font-family: var(--font-stack);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--window-bg);
+  box-sizing: border-box;
+  user-select: text;
+}
+
+/* -- Minesweeper (Ticket 5) ----------------------------------------
+   Flat, Windows 11 / macOS inspired board. A control bar (difficulty
+   selector + restart), a status row (mine counter + timer) and a CSS
+   grid board. Cell size is set per difficulty via --ms-cell so the
+   board fits the window. */
+
+.minesweeper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--window-bg);
+  padding: 10px;
+  gap: 8px;
+  box-sizing: border-box;
+  color: var(--text);
+}
+
+.minesweeper-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 0 2px;
+}
+
+.ms-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  background: #f5f5f6;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+}
+
+.ms-diff {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-family: var(--font-stack);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.ms-diff:hover {
+  background: #e9ecef;
+}
+
+.ms-diff.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.ms-restart {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fbfbfb;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.ms-restart:hover {
+  background: #f0f0f0;
+}
+
+.ms-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #2f2f35;
+  border-radius: 8px;
+}
+
+.ms-mines,
+.ms-timer {
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: #111114;
+  padding: 4px 10px;
+  border-radius: 6px;
+  min-width: 62px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.ms-timer {
+  text-align: right;
+}
+
+.ms-board {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 4px;
+}
+
+.ms-grid {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  background: #d7d7db;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.ms-cell {
+  width: var(--ms-cell, 26px);
+  height: var(--ms-cell, 26px);
+  border: none;
+  border-radius: 4px;
+  font-family: var(--font-stack);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #c9ccd1;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 0.05s ease;
+  user-select: none;
+}
+
+.ms-cell:hover:not(.revealed) {
+  background: #bfbfc5;
+}
+
+.ms-cell:active:not(.revealed) {
+  transform: scale(0.94);
+}
+
+.ms-cell.revealed {
+  background: #ececee;
+  cursor: default;
+  box-shadow: none;
+}
+
+.ms-cell.mine.revealed {
+  background: #e34a44;
+  color: #fff;
+}
+
+.ms-cell.flagged {
+  color: #c53030;
+}
+
+.ms-cell.wrong {
+  color: #b42318;
+}
+
+.ms-cell.revealed.n1 { color: #2563eb; }
+.ms-cell.revealed.n2 { color: #16a34a; }
+.ms-cell.revealed.n3 { color: #dc2626; }
+.ms-cell.revealed.n4 { color: #7c3aed; }
+.ms-cell.revealed.n5 { color: #c91818; }
+.ms-cell.revealed.n6 { color: #0891b2; }
+.ms-cell.revealed.n7 { color: #1f2937; }
+.ms-cell.revealed.n8 { color: #6b7280; }
+
+.ms-result {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 6px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.ms-result.win {
+  color: #16a34a;
+  background: #e7f6ec;
+}
+
+.ms-result.lose {
+  color: #b42318;
+  background: #fde2df;
+}
+
+/* -- Calculator (Ticket 3) -----------------------------------------
+   Fills the window body: a two-line display above a 4-key grid.
+   The grid has 5 rows; the leading 0 spans two columns. */
+
+.calc {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--window-bg);
+}
+
+.calc-display {
+  flex: 0 0 auto;
+  padding: 14px 16px 10px;
+  background: #f7f7f8;
+  border-bottom: 1px solid #ececec;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.calc-prev {
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-height: 16px;
+  word-break: break-all;
+  text-align: right;
+  width: 100%;
+}
+
+.calc-current {
+  font-size: 34px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.1;
+  word-break: break-all;
+  text-align: right;
+  width: 100%;
+}
+
+.calc-keys {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 8px;
+  padding: 10px;
+}
+
+.calc-key {
+  border: none;
+  border-radius: 8px;
+  background: #eef0f2;
+  color: var(--text);
+  font-family: var(--font-stack);
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  transition: background 0.08s ease, transform 0.05s ease;
+}
+
+.calc-key:active {
+  transform: scale(0.97);
+}
+
+.calc-key:hover {
+  background: #e4e7ea;
+}
+
+/* Operator keys (÷ × − +) */
+.calc-key.op {
+  background: #dcdfe3;
+  color: #2b2b30;
+}
+
+.calc-key.op:hover {
+  background: #d0d4d9;
+}
+
+/* Control keys (C ± %) */
+.calc-key.ctrl {
+  background: #e2e6ea;
+  color: #3a3a40;
+}
+
+.calc-key.ctrl:hover {
+  background: #d6dbe0;
+}
+
+/* Equals key */
+.calc-key.equals {
+  background: var(--accent);
+  color: #fff;
+}
+
+.calc-key.equals:hover {
+  filter: brightness(1.05);
+}
+
+/* Leading 0 spans two columns. */
+.calc-key.wide {
+  grid-column: span 2;
+}
+
+/* -- Spider Solitaire (Ticket 6) ----------------------------------
+   Flat, Windows 11 / macOS inspired layout: a header (New Game +
+   stock deal control), a 10-column tableau with overlapping cards,
+   and a stock indicator at the bottom. Card size and overlap are set
+   via CSS variables so the board scales to the window. */
+
+.spider {
+  --spider-w: 64px;
+  --spider-h: 90px;
+  --spider-overlap: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--window-bg);
+  color: var(--text);
+}
+
+.spider-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #ececec;
+}
+
+.spider-new {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: var(--font-stack);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spider-new:hover {
+  filter: brightness(1.05);
+}
+
+.spider-stock-btn {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fbfbfb;
+  padding: 6px 12px;
+  font-family: var(--font-stack);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spider-stock-btn:hover {
+  background: #f0f0f0;
+}
+
+.spider-stock-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: #fbfbfb;
+}
+
+.spider-stock-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.spider-stock-dot {
+  width: 8px;
+  height: 11px;
+  border-radius: 2px;
+  background: #2f855a;
+}
+
+.spider-stock-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.spider-win {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 8px 12px 4px;
+  border-radius: 8px;
+  background: #e7f6ec;
+  color: #16a34a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.spider-win.show {
+  display: flex;
+}
+
+.spider-tableau {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.spider-col {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 64px;
+  min-height: 90px;
+  border-top: 3px solid transparent;
+  border-radius: 6px;
+  transition: border-color 0.1s ease;
+}
+
+.spider-col.drop-ok {
+  border-top-color: var(--accent);
+}
+
+.spider-col-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 90px;
+  border: 2px dashed rgba(0, 0, 0, 0.14);
+  border-radius: 8px;
+  color: rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+}
+
+.spider-card {
+  width: var(--spider-w);
+  height: var(--spider-h);
+  border-radius: 7px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  margin-top: calc(var(--spider-overlap) * -1);
+  font-family: var(--font-stack);
+  font-weight: 700;
+  user-select: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  will-change: transform;
+}
+
+.spider-card:first-child {
+  margin-top: 0;
+}
+
+.spider-card.faceup {
+  background: #fff;
+  color: #1b1b1f;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px 8px;
+}
+
+.spider-card.facedown {
+  background:
+    repeating-linear-gradient(45deg, #2f855a 0 6px, #276f4b 6px 12px);
+  border: 2px solid #e9ecef;
+}
+
+.spider-card.facedown::after {
+  content: "";
+  display: block;
+  margin: auto;
+  width: 26px;
+  height: 36px;
+  margin-top: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+}
+
+.spider-card .rank-top {
+  font-size: 15px;
+  line-height: 1;
+  text-align: left;
+}
+
+.spider-card .suit-big {
+  font-size: 30px;
+  text-align: center;
+  line-height: 1;
+}
+
+.spider-card .rank-bot {
+  font-size: 15px;
+  text-align: left;
+  transform: rotate(180deg);
+}
+
+.spider-card.red {
+  color: #c62828;
+}
+
+.spider-card.dragging {
+  opacity: 0.35;
+}
+
+.spider-drag-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 20000;
+}
+
+.spider-drag-layer .spider-card {
+  margin-top: calc(var(--spider-overlap) * -1);
+}
+
+.spider-stock-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid #ececec;
+}
+
+.spider-stock-pile {
+  position: relative;
+  width: 64px;
+  height: 90px;
+  border-radius: 7px;
+  border: 1px solid #d5d5d5;
+  background: #f2f2f2;
+  cursor: pointer;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spider-stock-pile:hover {
+  background: #eaeaea;
+}
+
+.spider-stock-cards {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  gap: 2px;
+}
+
+.spider-stock-card-mini {
+  width: 16px;
+  height: 22px;
+  border-radius: 3px;
+  background: #2f855a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.spider-stock-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
