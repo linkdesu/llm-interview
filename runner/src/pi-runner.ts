@@ -9,7 +9,7 @@ import {
   stat,
   symlink,
 } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { runLog } from "./run-log";
@@ -34,25 +34,51 @@ const log = (msg: string) => {
 let cachedMcpPath: string | null | undefined;
 function globalChromeDevToolsMcpPath(): string | null {
   if (cachedMcpPath !== undefined) return cachedMcpPath;
+  const candidates: string[] = [];
+  // npm global layout: <npm prefix>/lib/node_modules/... (mirrors
+  // chrome-devtools-axi's own detectGlobalMcpPath probe)
   try {
     const prefix = execFileSync("npm", ["prefix", "-g"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    const candidate = join(
-      prefix,
-      "lib",
+    candidates.push(
+      join(
+        prefix,
+        "lib",
+        "node_modules",
+        "chrome-devtools-mcp",
+        "build",
+        "src",
+        "bin",
+        "chrome-devtools-mcp.js"
+      )
+    );
+  } catch {
+    // npm unavailable — fall through to bun candidates
+  }
+  // bun global layout: ~/.bun/bin/chrome-devtools-mcp is a symlink whose
+  // realpath IS the mcp.js entry (bun 1.4 resolves globals under
+  // <home>/node_modules via that link).
+  try {
+    const bunBin = join(homedir(), ".bun", "bin", "chrome-devtools-mcp");
+    if (existsSync(bunBin)) candidates.push(realpathSync(bunBin));
+  } catch {
+    // ignore — keep probing
+  }
+  // explicit fallback for bun layouts where the bin link lives elsewhere
+  candidates.push(
+    join(
+      homedir(),
       "node_modules",
       "chrome-devtools-mcp",
       "build",
       "src",
       "bin",
       "chrome-devtools-mcp.js"
-    );
-    cachedMcpPath = existsSync(candidate) ? candidate : null;
-  } catch {
-    cachedMcpPath = null;
-  }
+    )
+  );
+  cachedMcpPath = candidates.find((c) => existsSync(c)) ?? null;
   if (cachedMcpPath) {
     log(`chrome-devtools-mcp global build: ${cachedMcpPath}`);
   }
