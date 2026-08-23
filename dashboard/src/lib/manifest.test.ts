@@ -26,6 +26,7 @@ function makeCombo(overrides: Partial<ComboEntry> & { comboId: string }): ComboE
 }
 
 const fixture: ComboEntry[] = [
+  // c3 deliberately carries no totalTokens/turnCount (older manifest shape)
   makeCombo({
     comboId: 'c3',
     question: { name: 'snake', hasSpec: true, hasTickets: true },
@@ -35,11 +36,15 @@ const fixture: ComboEntry[] = [
     comboId: 'c1',
     question: { name: 'pomodoro', hasSpec: false, hasTickets: false },
     model: { name: 'qwen3.6-27b', provider: 'llamacpp-local', modelId: 'qwen3.6-27b-fusion-q5' },
+    totalTokens: 1200,
+    turnCount: 40,
   }),
   makeCombo({
     comboId: 'c2',
     question: { name: 'snake', hasSpec: true, hasTickets: true },
     model: { name: 'qwen3.6-27b', provider: 'llamacpp-local', modelId: 'qwen3.6-27b-fusion-q5' },
+    totalTokens: 300,
+    turnCount: 12,
   }),
 ]
 
@@ -72,13 +77,16 @@ describe('summarizeQuestions', () => {
 })
 
 describe('summarizeManifest', () => {
-  it('counts distinct questions and models, sessions and total duration', () => {
+  it('counts distinct questions and models, sessions, duration, tokens and turns', () => {
     expect(summarizeManifest(fixture)).toEqual({
       questionCount: 2,
       modelCount: 2,
       modelNames: ['qwen3.6-27b', 'zephyr-7b'],
       sessionCount: 3,
       totalDurationMs: 292713 * 3,
+      // c3 lacks the fields and contributes 0
+      totalTokens: 1500,
+      turnCount: 52,
     })
   })
 
@@ -89,6 +97,8 @@ describe('summarizeManifest', () => {
       modelNames: [],
       sessionCount: 0,
       totalDurationMs: 0,
+      totalTokens: 0,
+      turnCount: 0,
     })
   })
 })

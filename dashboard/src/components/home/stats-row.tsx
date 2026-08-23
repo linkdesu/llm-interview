@@ -45,9 +45,9 @@ export function StatsRow({ stats }: { stats: ManifestStats }) {
   return (
     <section className="border-y border-border">
       <dl className="mx-auto grid max-w-5xl grid-cols-1 gap-y-8 px-4 py-10 md:grid-cols-4 md:gap-y-0 md:divide-x md:divide-border">
-        <NumericStat label="Questions" value={stats.questionCount} />
         <NumericStat label="Models" value={stats.modelCount} />
-        <NumericStat label="Sessions" value={stats.sessionCount} />
+        <NumericStat label="Tokens" value={stats.totalTokens} />
+        <NumericStat label="Turns" value={stats.turnCount} />
         <NumericStat
           label="Total run time"
           value={Math.round(stats.totalDurationMs / 1000)}

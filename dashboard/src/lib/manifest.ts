@@ -89,9 +89,13 @@ export interface ManifestStats {
   modelNames: string[]
   sessionCount: number
   totalDurationMs: number
+  /** Sum of per-combo totalTokens (missing fields count as 0). */
+  totalTokens: number
+  /** Sum of per-combo turnCount (missing fields count as 0). */
+  turnCount: number
 }
 
-/** Hero statistics: distinct questions and models, session count, total run time. */
+/** Hero statistics: distinct questions and models, session count, total run time, total tokens, total turns. */
 export function summarizeManifest(combos: ComboEntry[]): ManifestStats {
   const modelNames = [...new Set(combos.map((combo) => combo.model.name))].sort(
     (a, b) => a.localeCompare(b),
@@ -102,6 +106,8 @@ export function summarizeManifest(combos: ComboEntry[]): ManifestStats {
     modelNames,
     sessionCount: combos.length,
     totalDurationMs: combos.reduce((sum, combo) => sum + combo.durationMs, 0),
+    totalTokens: combos.reduce((sum, combo) => sum + (combo.totalTokens ?? 0), 0),
+    turnCount: combos.reduce((sum, combo) => sum + (combo.turnCount ?? 0), 0),
   }
 }
 
